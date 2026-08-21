@@ -1,9 +1,3 @@
---[================================================================]--
---  Cubic Advanced Exploits UI - Ultimate Error-Free Edition
---  Includes: Drag Bug Fix, Property Panel, Hitbox Default 20,
---            Smooth Tweens, and Cleaned Engine Code.
---[================================================================]--
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
