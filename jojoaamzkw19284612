@@ -1,3 +1,4 @@
+--업데이트 적용 주석
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -21,6 +22,7 @@ local states = {
     Speed = false,
     InfJump = false,
     ESP = false,
+    Xray = false,
     SkeletonESP = false,
     HitboxExpander = false,
     Fling = false,
@@ -44,7 +46,7 @@ local states = {
     GravityMod = false
 }
 
--- [ 세부 속성 설정 변수 (히트박스 기본값 20 반영) ]
+-- [ 세부 속성 설정 변수 ]
 local settingsConfig = {
     FlySpeed = 50,
     FlyNoFallSpeed = 16,
@@ -88,7 +90,7 @@ MainStroke.Transparency = 0.4
 MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
--- [ 완벽한 드래그 시스템 (버그 차단) ]
+-- [ 완벽한 드래그 시스템 ]
 local dragging = false
 local dragStart, startPos
 
@@ -228,7 +230,7 @@ local function addPropertyRow(name, defaultVal, callback)
 end
 
 addPropertyRow("Fly Speed", settingsConfig.FlySpeed, function(v) settingsConfig.FlySpeed = v end)
-addPropertyRow("Walk Speed", settingsConfig.SpeedValue, function(v) settingsConfig.SpeedValue = v end)
+addPropertyRow("Move Speed (Velocity)", settingsConfig.SpeedValue, function(v) settingsConfig.SpeedValue = v end)
 addPropertyRow("Hitbox Size (Def:20)", settingsConfig.HitboxSize, function(v) settingsConfig.HitboxSize = v end)
 addPropertyRow("FOV Value", settingsConfig.FOVValue, function(v) settingsConfig.FOVValue = v end)
 addPropertyRow("AutoClick CPS", settingsConfig.CPS, function(v) settingsConfig.CPS = v end)
@@ -382,7 +384,7 @@ end
 createFeatureCard(MainTab, "Fly", "360도 자유 비행 (우클릭: 속성)", "Fly", false)
 createFeatureCard(MainTab, "Auto-Teleport", "가장 가까운 대상 추적 텔레포트", "AutoTeleport", false)
 createFeatureCard(MainTab, "Noclip", "벽 통과 모드 활성화", "Noclip", false)
-createFeatureCard(MainTab, "Speed", "이동 속도 부스트 적용 (우클릭: 속성)", "Speed", false)
+createFeatureCard(MainTab, "Speed", "애니메이션 고정 이동 속도 부스트 (우클릭: 속성)", "Speed", false)
 createFeatureCard(MainTab, "InfJump", "무한 공중 점프 가능", "InfJump", false)
 createFeatureCard(MainTab, "Fling", "상대방 고속 물리 플링 유도", "Fling", false)
 createFeatureCard(MainTab, "AntiVoid", "공허 추락 방지 및 상공 복구", "AntiVoid", false)
@@ -395,7 +397,8 @@ createFeatureCard(CombatTab, "Hitbox Expander", "피격 범위 확장 (기본값
 createFeatureCard(CombatTab, "God Mode", "체력 무한 불사신 모드", "God", false)
 createFeatureCard(CombatTab, "Allkill", "주변 모든 플레이어 즉시 처치", "Allkill", false)
 
-createFeatureCard(VisualTab, "ESP Box/Tracer", "적 위치 실시간 박스 및 선 표시", "ESP", false)
+createFeatureCard(VisualTab, "Advanced ESP + Tracert", "프리미엄 3D 박스, 트레이서트 선 및 체력바 표시", "ESP", false)
+createFeatureCard(VisualTab, "Xray", "완벽 복구 가능한 맵 투시 모드", "Xray", false)
 createFeatureCard(VisualTab, "Fullbright", "어두운 맵 밝기 최대화", "Fullbright", false)
 createFeatureCard(VisualTab, "FOV Changer", "시야각 확장 고정 (우클릭: 속성)", "FOV", false)
 
@@ -412,22 +415,24 @@ createFeatureCard(UtilTab, "Gravity Mod", "중력 감소 (달 위를 걷는 느�
 
 
 --[================================================================]--
---  엔진 로직 구동 부 (Engine Logic Core)
+--  엔진 로직 구동 부
 --[================================================================]--
 
+-- 안티치트 디스에이블 루프
 RunService.Stepped:Connect(function()
     if states.AntiCheat or states.FPSAntiCheat or states.TowerAntiCheat or states.PlusAntiCheat then
         local char = LocalPlayer.Character
         if char then
             for _, scriptObj in ipairs(char:GetDescendants()) do
                 if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac")) then
-                    scriptObj.Disabled = true
+                    pcall(function() scriptObj.Disabled = true end)
                 end
             end
         end
     end
 end)
 
+-- 플라이 기능 (물리 속도 안정화)
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
@@ -448,12 +453,13 @@ RunService.RenderStepped:Connect(function()
         root.AssemblyLinearVelocity = moveDir * settingsConfig.FlySpeed
         root.CFrame = CFrame.new(root.Position, root.Position + camCF.LookVector)
     else
-        if hum.PlatformStand and not states.Noclip and not autoNoFallActive then
+        if hum.PlatformStand and not states.Noclip then
             hum.PlatformStand = false
         end
     end
 end)
 
+-- 자동 텔레포트
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -473,12 +479,17 @@ task.spawn(function()
                         end
                     end
                 end
-                if targetRoot then char.HumanoidRootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3) end
+                if targetRoot then 
+                    pcall(function()
+                        char.HumanoidRootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3) 
+                    end)
+                end
             end
         end
     end
 end)
 
+-- 노클립 (충돌 제거)
 RunService.Stepped:Connect(function()
     if states.Noclip then
         local char = LocalPlayer.Character
@@ -490,14 +501,24 @@ RunService.Stepped:Connect(function()
     end
 end)
 
+-- 애니메이션 속도는 16으로 유지하고 물리 속도만 증가하는 방식 적용
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
-    if char and char:FindFirstChild("Humanoid") then
-        if states.Speed then char.Humanoid.WalkSpeed = settingsConfig.SpeedValue end
+    if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+        local hum = char.Humanoid
+        local root = char.HumanoidRootPart
+        
+        hum.WalkSpeed = 16
+        
+        if states.Speed and hum.MoveDirection.Magnitude > 0 then
+            local currentVel = root.AssemblyLinearVelocity
+            root.AssemblyLinearVelocity = Vector3.new(hum.MoveDirection.X * settingsConfig.SpeedValue, currentVel.Y, hum.MoveDirection.Z * settingsConfig.SpeedValue)
+        end
     end
-    Workspace.Gravity = states.GravityMod and 50 or 196.2
+    Workspace.Gravity = states.GravityMod and 50 or settingsConfig.GravityValue
 end)
 
+-- 무한 점프
 UserInputService.JumpRequest:Connect(function()
     if states.InfJump then
         local char = LocalPlayer.Character
@@ -507,6 +528,7 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
+-- 플링 (물리 충돌 가속)
 RunService.Heartbeat:Connect(function()
     if states.Fling then
         local char = LocalPlayer.Character
@@ -514,14 +536,17 @@ RunService.Heartbeat:Connect(function()
             local myRoot = char.HumanoidRootPart
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    myRoot.CFrame = p.Character.HumanoidRootPart.CFrame
-                    p.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(99999, 99999, 99999)
+                    pcall(function()
+                        myRoot.CFrame = p.Character.HumanoidRootPart.CFrame
+                        p.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(99999, 99999, 99999)
+                    end)
                 end
             end
         end
     end
 end)
 
+-- 안티보이드 (추락 방지)
 RunService.RenderStepped:Connect(function()
     if states.AntiVoid then
         local char = LocalPlayer.Character
@@ -534,6 +559,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- 갓 모드 (체력 무한)
 RunService.Stepped:Connect(function()
     if states.God then
         local char = LocalPlayer.Character
@@ -544,7 +570,8 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-autoNoFallActive = false
+-- 낙뎀 방지 비행 (FlyNoFall)
+local autoNoFallActive = false
 local lockedFlightY = 0
 task.spawn(function()
     while true do
@@ -580,6 +607,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
+    -- 스파이더 (벽 등반)
     if states.Spider then
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
@@ -594,6 +622,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- 올킬 (전체 처치)
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -607,7 +636,7 @@ task.spawn(function()
     end
 end)
 
--- [ 히트박스 크기 적용 (기본값 20) ]
+-- 히트박스 확장 (정밀 크기 제어)
 RunService.RenderStepped:Connect(function()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -624,6 +653,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- 에임봇 및 월체크
 RunService.RenderStepped:Connect(function()
     if states.Aimbot then
         local char = LocalPlayer.Character
@@ -632,7 +662,7 @@ RunService.RenderStepped:Connect(function()
             local closestDist = math.huge
             local targetHead = nil
             for _, p in ipairs(Players:GetPlayers()) do
-                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and p.Character.Humanoid.Health > 0 then
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
                     local head = p.Character.Head
                     if states.WallCheck then
                         local rayParams = RaycastParams.new()
@@ -652,6 +682,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- 오토클릭 관리
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp and input.KeyCode == settingsConfig.AutoClickKey then
         states.AutoClick = not states.AutoClick
@@ -669,6 +700,7 @@ task.spawn(function()
     end
 end)
 
+-- 안티 CT 및 쿨타임 우회
 RunService.Stepped:Connect(function()
     if states.AntiCT then
         local char = LocalPlayer.Character
@@ -680,14 +712,18 @@ RunService.Stepped:Connect(function()
     end
 end)
 
+-- 안티 AFK (잠수 방지)
 LocalPlayer.Idled:Connect(function()
     if states.AntiAFK then
-        game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        pcall(function()
+            game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end)
     end
 end)
 
+-- 줌, 풀브라이트, FOV
 RunService.RenderStepped:Connect(function()
     if states.MaxZoom then
         LocalPlayer.CameraMaxZoomDistance = 999999
@@ -701,43 +737,162 @@ RunService.RenderStepped:Connect(function()
     Camera.FieldOfView = states.FOV and settingsConfig.FOVValue or 70
 end)
 
+-- [완벽 복구 가능한 Xray 시스템]
+local xrayCache = {}
+RunService.RenderStepped:Connect(function()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            local isPlayerPart = false
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character and obj:IsDescendantOf(p.Character) then
+                    isPlayerPart = true
+                    break
+                end
+            end
+            if not isPlayerPart and obj ~= Workspace.Terrain then
+                if states.Xray then
+                    if not xrayCache[obj] then
+                        xrayCache[obj] = obj.Transparency
+                    end
+                    if obj.Transparency < 0.65 then
+                        obj.Transparency = 0.65
+                    end
+                else
+                    if xrayCache[obj] then
+                        obj.Transparency = xrayCache[obj]
+                        xrayCache[obj] = nil
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- [프리미엄 ESP 박스 + 명확한 트레이서트 선 및 인포 시스템]
 local espCache = {}
-local function createESP(p)
+
+local function setupESP(p)
     if p == LocalPlayer then return end
-    local tracer = Drawing.new("Line")
-    tracer.Visible = false; tracer.Color = settingsConfig.ESPColor; tracer.Thickness = 1.5
-    local box = Drawing.new("Square")
-    box.Visible = false; box.Color = settingsConfig.ESPColor; box.Thickness = 1; box.Filled = false
-    espCache[p] = {Tracer = tracer, Box = box}
+    
+    local function apply(char)
+        if not char then return end
+        if espCache[p] then 
+            pcall(function() 
+                espCache[p].Highlight:Destroy() 
+                espCache[p].Billboard:Destroy()
+                for _, line in pairs(espCache[p].Lines) do line:Destroy() end
+            end)
+        end
+        
+        -- HighLight
+        local hl = Instance.new("Highlight")
+        hl.Name = "CubicESP"
+        hl.Adornee = char
+        hl.FillColor = settingsConfig.ESPColor
+        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.FillTransparency = 0.4
+        hl.OutlineTransparency = 0
+        hl.Enabled = states.ESP
+        hl.Parent = char
+        
+        -- 정보 표시 BillboardGui (이름, 거리, 체력)
+        local bg = Instance.new("BillboardGui")
+        bg.Name = "CubicESPInfo"
+        bg.Size = UDim2.new(0, 150, 0, 50)
+        bg.StudsOffset = Vector3.new(0, 3, 0)
+        bg.AlwaysOnTop = true
+        bg.Enabled = states.ESP
+        bg.Parent = char:WaitForChild("Head", 5) or char
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, 0, 0, 20)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.Text = p.Name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextSize = 12
+        nameLabel.TextStrokeTransparency = 0.5
+        nameLabel.Parent = bg
+        
+        local infoLabel = Instance.new("TextLabel")
+        infoLabel.Size = UDim2.new(1, 0, 0, 20)
+        infoLabel.Position = UDim2.new(0, 0, 0, 18)
+        infoLabel.BackgroundTransparency = 1
+        infoLabel.Font = Enum.Font.Gotham
+        infoLabel.Text = "[Health: 100]"
+        infoLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+        infoLabel.TextSize = 10
+        infoLabel.TextStrokeTransparency = 0.5
+        infoLabel.Parent = bg
+
+        -- 명확한 트레이서트 선을 위한 빔 구성 (고명도 파트 연결)
+        local tracePart = Instance.new("Part")
+        tracePart.Size = Vector3.new(0.1, 0.1, 0.1)
+        tracePart.Transparency = 1
+        tracePart.CanCollide = false
+        tracePart.Anchored = true
+        tracePart.Parent = Workspace
+        
+        local att0 = Instance.new("Attachment", Workspace.Terrain)
+        local att1 = Instance.new("Attachment", tracePart)
+        
+        local beam = Instance.new("Beam")
+        beam.Color = ColorSequence.new(settingsConfig.ESPColor)
+        beam.Width0 = 0.12
+        beam.Width1 = 0.12
+        beam.Transparency = NumberSequence.new(0.1)
+        beam.FaceCamera = true
+        beam.Attachment0 = att0
+        beam.Attachment1 = att1
+        beam.Enabled = states.ESP
+        beam.Parent = tracePart
+        
+        espCache[p] = {Highlight = hl, Billboard = bg, InfoLabel = infoLabel, TracePart = tracePart, Beam = beam, Att0 = att0, Att1 = att1}
+    end
+    
+    p.CharacterAdded:Connect(apply)
+    if p.Character then apply(p.Character) end
 end
+
 local function removeESP(p)
     if espCache[p] then
-        if espCache[p].Tracer then espCache[p].Tracer:Remove() end
-        if espCache[p].Box then espCache[p].Box:Remove() end
+        pcall(function() 
+            espCache[p].Highlight:Destroy()
+            espCache[p].Billboard:Destroy()
+            espCache[p].TracePart:Destroy()
+        end)
         espCache[p] = nil
     end
 end
-for _, p in ipairs(Players:GetPlayers()) do createESP(p) end
-Players.PlayerAdded:Connect(createESP)
+
+for _, p in ipairs(Players:GetPlayers()) do setupESP(p) end
+Players.PlayerAdded:Connect(setupESP)
 Players.PlayerRemoving:Connect(removeESP)
 
 RunService.RenderStepped:Connect(function()
-    for p, d in pairs(espCache) do
-        if states.ESP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-            local pos, onScreen = Camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
-            if onScreen then
-                d.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                d.Tranca = nil -- clean
-                d.Tracer.To = Vector2.new(pos.X, pos.Y)
-                d.Tracer.Visible = true
-                d.Box.Size = Vector2.new(30, 50)
-                d.Box.Position = Vector2.new(pos.X - 15, pos.Y - 25)
-                d.Box.Visible = true
-            else
-                d.Tracer.Visible = false; d.Box.Visible = false
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    
+    for p, data in pairs(espCache) do
+        if data and data.Highlight and data.Beam then
+            data.Highlight.Enabled = states.ESP
+            data.Highlight.FillColor = settingsConfig.ESPColor
+            data.Beam.Enabled = states.ESP
+            data.Beam.Color = ColorSequence.new(settingsConfig.ESPColor)
+            data.Billboard.Enabled = states.ESP
+            
+            if states.ESP and myRoot and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") then
+                local targetRoot = p.Character.HumanoidRootPart
+                local hum = p.Character.Humanoid
+                
+                data.TracePart.Position = targetRoot.Position
+                data.Att0.WorldPosition = myRoot.Position - Vector3.new(0, 2, 0)
+                data.Att1.WorldPosition = targetRoot.Position
+                
+                local dist = math.floor((myRoot.Position - targetRoot.Position).Magnitude)
+                local hp = math.floor(hum.Health)
+                data.InfoLabel.Text = dist .. " studs | HP: " .. hp
             end
-        else
-            d.Tracer.Visible = false; d.Box.Visible = false
         end
     end
 end)
