@@ -1,4 +1,4 @@
---업데이트 적용 주석
+--업데이트 적용 됨.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
