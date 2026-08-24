@@ -1,4 +1,4 @@
---업데이트 적용 됨.
+--업데이트 적용 (AutoClicker Fix)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,6 +6,7 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -423,7 +424,7 @@ local acTimer = 0
 RunService.Stepped:Connect(function(dt)
     if not (states.AntiCheat or states.FPSAntiCheat or states.TowerAntiCheat or states.PlusAntiCheat) then return end
     acTimer = acTimer + dt
-    if acTimer < 1 then return end -- 1초에 한 번만 실행하여 과부하 방지
+    if acTimer < 1 then return end
     acTimer = 0
     
     local char = LocalPlayer.Character
@@ -686,7 +687,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- 오토클릭 관리
+-- [오토클릭 개선 관리 시스템]
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp and input.KeyCode == settingsConfig.AutoClickKey then
         states.AutoClick = not states.AutoClick
@@ -696,7 +697,16 @@ end)
 task.spawn(function()
     while true do
         if states.AutoClick then
-            pcall(function() mouse1click() end)
+            pcall(function()
+                -- 표준 지원 방식 및 VirtualUser 동시 호환 실행
+                if mouse1click then
+                    mouse1click()
+                else
+                    VirtualUser:Button1Down(Vector2.new(0, 0), Camera.CFrame)
+                    task.wait(0.02)
+                    VirtualUser:Button1Up(Vector2.new(0, 0), Camera.CFrame)
+                end
+            end)
             task.wait(1 / settingsConfig.CPS)
         else
             task.wait(0.1)
@@ -720,9 +730,9 @@ end)
 LocalPlayer.Idled:Connect(function()
     if states.AntiAFK then
         pcall(function()
-            game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            VirtualUser:Button2Down(Vector2.new(0,0), Camera.CFrame)
             task.wait(1)
-            game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            VirtualUser:Button2Up(Vector2.new(0,0), Camera.CFrame)
         end)
     end
 end)
@@ -741,7 +751,7 @@ RunService.RenderStepped:Connect(function()
     Camera.FieldOfView = states.FOV and settingsConfig.FOVValue or 70
 end)
 
--- [완벽 복구 가능한 Xray 시스템] (최적화: 변경 필요 시에만 투명도 조절)
+-- [완벽 복구 가능한 Xray 시스템]
 local xrayCache = {}
 RunService.RenderStepped:Connect(function()
     if states.Xray then
@@ -803,7 +813,7 @@ local function setupESP(p)
         hl.Enabled = states.ESP
         hl.Parent = char
         
-        -- 정보 표시 BillboardGui (이름, 거리, 체력)
+        -- 정보 표시 BillboardGui
         local bg = Instance.new("BillboardGui")
         bg.Name = "CubicESPInfo"
         bg.Size = UDim2.new(0, 150, 0, 50)
@@ -833,7 +843,7 @@ local function setupESP(p)
         infoLabel.TextStrokeTransparency = 0.5
         infoLabel.Parent = bg
 
-        -- 명확한 트레이서트 선을 위한 빔 구성
+        -- 트레이서트 선을 위한 빔 구성
         local tracePart = Instance.new("Part")
         tracePart.Size = Vector3.new(0.1, 0.1, 0.1)
         tracePart.Transparency = 1
