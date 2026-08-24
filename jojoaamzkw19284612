@@ -418,15 +418,19 @@ createFeatureCard(UtilTab, "Gravity Mod", "중력 감소 (달 위를 걷는 느�
 --  엔진 로직 구동 부
 --[================================================================]--
 
--- 안티치트 디스에이블 루프
-RunService.Stepped:Connect(function()
-    if states.AntiCheat or states.FPSAntiCheat or states.TowerAntiCheat or states.PlusAntiCheat then
-        local char = LocalPlayer.Character
-        if char then
-            for _, scriptObj in ipairs(char:GetDescendants()) do
-                if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac")) then
-                    pcall(function() scriptObj.Disabled = true end)
-                end
+-- 안티치트 디스에이블 루프 (최적화: Throttle 적용)
+local acTimer = 0
+RunService.Stepped:Connect(function(dt)
+    if not (states.AntiCheat or states.FPSAntiCheat or states.TowerAntiCheat or states.PlusAntiCheat) then return end
+    acTimer = acTimer + dt
+    if acTimer < 1 then return end -- 1초에 한 번만 실행하여 과부하 방지
+    acTimer = 0
+    
+    local char = LocalPlayer.Character
+    if char then
+        for _, scriptObj in ipairs(char:GetDescendants()) do
+            if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac")) then
+                pcall(function() scriptObj.Disabled = true end)
             end
         end
     end
@@ -737,33 +741,37 @@ RunService.RenderStepped:Connect(function()
     Camera.FieldOfView = states.FOV and settingsConfig.FOVValue or 70
 end)
 
--- [완벽 복구 가능한 Xray 시스템]
+-- [완벽 복구 가능한 Xray 시스템] (최적화: 변경 필요 시에만 투명도 조절)
 local xrayCache = {}
 RunService.RenderStepped:Connect(function()
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local isPlayerPart = false
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.Character and obj:IsDescendantOf(p.Character) then
-                    isPlayerPart = true
-                    break
+    if states.Xray then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj ~= Workspace.Terrain then
+                local isPlayerPart = false
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p.Character and obj:IsDescendantOf(p.Character) then
+                        isPlayerPart = true
+                        break
+                    end
                 end
-            end
-            if not isPlayerPart and obj ~= Workspace.Terrain then
-                if states.Xray then
+                if not isPlayerPart then
                     if not xrayCache[obj] then
                         xrayCache[obj] = obj.Transparency
                     end
                     if obj.Transparency < 0.65 then
                         obj.Transparency = 0.65
                     end
-                else
-                    if xrayCache[obj] then
-                        obj.Transparency = xrayCache[obj]
-                        xrayCache[obj] = nil
-                    end
                 end
             end
+        end
+    else
+        if next(xrayCache) then
+            for obj, origTrans in pairs(xrayCache) do
+                if obj and obj.Parent then
+                    obj.Transparency = origTrans
+                end
+            end
+            xrayCache = {}
         end
     end
 end)
@@ -778,9 +786,9 @@ local function setupESP(p)
         if not char then return end
         if espCache[p] then 
             pcall(function() 
-                espCache[p].Highlight:Destroy() 
-                espCache[p].Billboard:Destroy()
-                for _, line in pairs(espCache[p].Lines) do line:Destroy() end
+                if espCache[p].Highlight then espCache[p].Highlight:Destroy() end
+                if espCache[p].Billboard then espCache[p].Billboard:Destroy() end
+                if espCache[p].TracePart then espCache[p].TracePart:Destroy() end
             end)
         end
         
@@ -825,7 +833,7 @@ local function setupESP(p)
         infoLabel.TextStrokeTransparency = 0.5
         infoLabel.Parent = bg
 
-        -- 명확한 트레이서트 선을 위한 빔 구성 (고명도 파트 연결)
+        -- 명확한 트레이서트 선을 위한 빔 구성
         local tracePart = Instance.new("Part")
         tracePart.Size = Vector3.new(0.1, 0.1, 0.1)
         tracePart.Transparency = 1
@@ -846,7 +854,7 @@ local function setupESP(p)
         beam.Attachment1 = att1
         beam.Enabled = states.ESP
         beam.Parent = tracePart
-        
+
         espCache[p] = {Highlight = hl, Billboard = bg, InfoLabel = infoLabel, TracePart = tracePart, Beam = beam, Att0 = att0, Att1 = att1}
     end
     
@@ -857,9 +865,9 @@ end
 local function removeESP(p)
     if espCache[p] then
         pcall(function() 
-            espCache[p].Highlight:Destroy()
-            espCache[p].Billboard:Destroy()
-            espCache[p].TracePart:Destroy()
+            if espCache[p].Highlight then espCache[p].Highlight:Destroy() end
+            if espCache[p].Billboard then espCache[p].Billboard:Destroy() end
+            if espCache[p].TracePart then espCache[p].TracePart:Destroy() end
         end)
         espCache[p] = nil
     end
