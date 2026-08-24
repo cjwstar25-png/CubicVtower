@@ -1,4 +1,4 @@
---업데이트 적용 (AutoClicker Fix)
+--업데이트 적용 주석 (Interactive Config List UI Added)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -6,6 +6,7 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
@@ -238,26 +239,26 @@ addPropertyRow("AutoClick CPS", settingsConfig.CPS, function(v) settingsConfig.C
 
 -- [ 탭 시스템 ]
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(0, 390, 0, 32)
-TabContainer.Position = UDim2.new(0, 210, 0, 9)
+TabContainer.Size = UDim2.new(0, 410, 0, 32)
+TabContainer.Position = UDim2.new(0, 200, 0, 9)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = TitleBar
 
 local UIListLayoutTabs = Instance.new("UIListLayout")
 UIListLayoutTabs.FillDirection = Enum.FillDirection.Horizontal
 UIListLayoutTabs.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayoutTabs.Padding = UDim.new(0, 6)
+UIListLayoutTabs.Padding = UDim.new(0, 4)
 UIListLayoutTabs.Parent = TabContainer
 
 local tabContents = {}
 local function createTabButton(name, layoutOrder)
     local TabBtn = Instance.new("TextButton")
-    TabBtn.Size = UDim2.new(0, 70, 1, 0)
+    TabBtn.Size = UDim2.new(0, 58, 1, 0)
     TabBtn.BackgroundColor3 = layoutOrder == 1 and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(25, 30, 42)
     TabBtn.Font = Enum.Font.GothamBold
     TabBtn.Text = name
     TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TabBtn.TextSize = 11
+    TabBtn.TextSize = 10
     TabBtn.LayoutOrder = layoutOrder
     TabBtn.Parent = TabContainer
 
@@ -302,6 +303,7 @@ local CombatTab = createTabButton("Combat", 2)
 local VisualTab = createTabButton("Visual", 3)
 local ACTab = createTabButton("AntiCheat", 4)
 local UtilTab = createTabButton("Utility", 5)
+local ConfigTab = createTabButton("Config", 6)
 
 -- [ 기능 카드 생성 ]
 local function createFeatureCard(parentTab, name, desc, featureKey, defaultState)
@@ -413,6 +415,173 @@ createFeatureCard(UtilTab, "AntiCT", "스킬/아이템 쿨타임/디바운스 �
 createFeatureCard(UtilTab, "Anti-AFK", "잠수 방지 (자동 튕김 차단)", "AntiAFK", true)
 createFeatureCard(UtilTab, "Max Zoom", "카메라 최대/최소 줌 제한 해제", "MaxZoom", true)
 createFeatureCard(UtilTab, "Gravity Mod", "중력 감소 (달 위를 걷는 느낌)", "GravityMod", false)
+
+-- [ Config 탭 내부 UI 구현 (실시간 목록 리스트 추가) ]
+local ConfigLayout = ConfigTab:FindFirstChildOfClass("UIGridLayout")
+if ConfigLayout then ConfigLayout:Destroy() end
+
+local ConfigListLayout = Instance.new("UIListLayout")
+ConfigListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ConfigListLayout.Padding = UDim.new(0, 10)
+ConfigListLayout.Parent = ConfigTab
+
+-- 설정 파일 이름 입력 박스
+local ConfigInputBox = Instance.new("TextBox")
+ConfigInputBox.Size = UDim2.new(1, 0, 0, 35)
+ConfigInputBox.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
+ConfigInputBox.Font = Enum.Font.GothamBold
+ConfigInputBox.PlaceholderText = "Enter Config Name..."
+ConfigInputBox.Text = "my_config"
+ConfigInputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+ConfigInputBox.PlaceholderColor3 = Color3.fromRGB(100, 110, 130)
+ConfigInputBox.TextSize = 12
+ConfigInputBox.Parent = ConfigTab
+
+local CBoxCorner = Instance.new("UICorner")
+CBoxCorner.CornerRadius = UDim.new(0, 6)
+CBoxCorner.Parent = ConfigInputBox
+
+local CBoxStroke = Instance.new("UIStroke")
+CBoxStroke.Color = Color3.fromRGB(40, 48, 66)
+CBoxStroke.Parent = ConfigInputBox
+
+-- 버튼 생성 헬퍼 함수
+local function createConfigButton(name, color, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 35)
+    btn.BackgroundColor3 = color
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 12
+    btn.Parent = ConfigTab
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+
+    btn.MouseButton1Click:Connect(callback)
+    return btn
+end
+
+local function ensureFolder()
+    if pcall(function() if not isfolder("CubicConfigs") then makefolder("CubicConfigs") end end) then return true end
+    return false
+end
+
+-- 저장된 파일 리스트를 표시해줄 하단 스크롤 프레임 컨테이너
+local FileListContainer = Instance.new("ScrollingFrame")
+FileListContainer.Size = UDim2.new(1, 0, 0, 160)
+FileListContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
+FileListContainer.BorderSizePixel = 0
+FileListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+FileListContainer.ScrollBarThickness = 4
+FileListContainer.Parent = ConfigTab
+
+local FileListCorner = Instance.new("UICorner")
+FileListCorner.CornerRadius = UDim.new(0, 6)
+FileListCorner.Parent = FileListContainer
+
+local FileListLayout = Instance.new("UIListLayout")
+FileListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+FileListLayout.Padding = UDim.new(0, 5)
+FileListLayout.Parent = FileListContainer
+
+-- 실시간 설정 파일 목록 갱신 함수
+local function refreshConfigList()
+    for _, child in pairs(FileListContainer:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    
+    if not ensureFolder() then return end
+    
+    local success, files = pcall(function() return listfiles("CubicConfigs") end)
+    if success and files then
+        local count = 0
+        for _, filePath in ipairs(files) do
+            if filePath:sub(-5) == ".json" then
+                count = count + 1
+                local fileName = filePath:match("([^/]+)$"):gsub("%.json$", "")
+                
+                local fileBtn = Instance.new("TextButton")
+                fileBtn.Size = UDim2.new(1, -10, 0, 30)
+                fileBtn.Position = UDim2.new(0, 5, 0, 0)
+                fileBtn.BackgroundColor3 = Color3.fromRGB(25, 30, 42)
+                fileBtn.Font = Enum.Font.Gotham
+                fileBtn.Text = "📁  " .. fileName
+                fileBtn.TextColor3 = Color3.fromRGB(220, 230, 250)
+                fileBtn.TextSize = 11
+                fileBtn.TextXAlignment = Enum.TextXAlignment.Left
+                fileBtn.Parent = FileListContainer
+                
+                local fCorner = Instance.new("UICorner")
+                fCorner.CornerRadius = UDim.new(0, 4)
+                fCorner.Parent = fileBtn
+                
+                -- 리스트 항목 클릭 시 입력창에 이름 자동 입력
+                fileBtn.MouseButton1Click:Connect(function()
+                    ConfigInputBox.Text = fileName
+                end)
+            end
+        end
+        FileListContainer.CanvasSize = UDim2.new(0, 0, 0, count * 35)
+    end
+end
+
+createConfigButton("Save Config", Color3.fromRGB(0, 140, 255), function()
+    if not ensureFolder() then return end
+    local name = ConfigInputBox.Text
+    if name == "" then name = "default" end
+    
+    local saveData = {
+        States = states,
+        Settings = settingsConfig
+    }
+    
+    pcall(function()
+        writefile("CubicConfigs/" .. name .. ".json", HttpService:JSONEncode(saveData))
+        refreshConfigList()
+    end)
+end)
+
+createConfigButton("Load Config", Color3.fromRGB(40, 160, 80), function()
+    if not ensureFolder() then return end
+    local name = ConfigInputBox.Text
+    local filePath = "CubicConfigs/" .. name .. ".json"
+    
+    pcall(function()
+        if isfile(filePath) then
+            local raw = readfile(filePath)
+            local decoded = HttpService:JSONDecode(raw)
+            if decoded.States then
+                for k, v in pairs(decoded.States) do
+                    if states[k] ~= nil then states[k] = v end
+                end
+            end
+            if decoded.Settings then
+                for k, v in pairs(decoded.Settings) do
+                    if settingsConfig[k] ~= nil then settingsConfig[k] = v end
+                end
+            end
+        end
+    end)
+end)
+
+createConfigButton("Delete Config", Color3.fromRGB(200, 50, 50), function()
+    if not ensureFolder() then return end
+    local name = ConfigInputBox.Text
+    local filePath = "CubicConfigs/" .. name .. ".json"
+    
+    pcall(function()
+        if isfile(filePath) then
+            delfile(filePath)
+            refreshConfigList()
+        end
+    end)
+end)
+
+-- 초기 로드 시 파일 목록 갱신 실행
+task.spawn(refreshConfigList)
 
 
 --[================================================================]--
@@ -698,7 +867,6 @@ task.spawn(function()
     while true do
         if states.AutoClick then
             pcall(function()
-                -- 표준 지원 방식 및 VirtualUser 동시 호환 실행
                 if mouse1click then
                     mouse1click()
                 else
