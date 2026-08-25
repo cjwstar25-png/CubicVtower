@@ -1,4 +1,4 @@
---업데이트 적용 주석 (Interactive Config List UI Added)
+-- [최종 균형 수정본] PC/모바일 프레임과 내부 버튼 크기 완전 분리
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,72 +11,89 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local ScreenSize = Camera.ViewportSize
 
-if CoreGui:FindFirstChild("CubicErrorFreeUI") then
-    CoreGui.CubicErrorFreeUI:Destroy()
+-- [디바이스 감지 및 크기 전략 분리]
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local screenW = ScreenSize.X
+
+local uiScale  -- 버튼, 텍스트, 패딩 크기 전용
+local frameW   -- 프레임 너비 비율
+local frameH   -- 프레임 높이 비율
+
+if isMobile then
+    -- 모바일: 프레임을 적당히(85%) 줄이고, 내부 버튼은 터치를 위해 크게(1.1~1.6배)
+    frameW = 0.85
+    frameH = 0.78
+    uiScale = math.clamp(screenW / 700, 1.1, 1.6)
+else
+    -- PC: 프레임을 작게(48%) 유지하고, 내부 버튼은 적당한 크기(0.7~1.2배)
+    frameW = 0.48
+    frameH = 0.65
+    uiScale = math.clamp(screenW / 1800, 0.7, 1.2)
 end
 
--- [ 상태 관리 변수 ]
+-- 기존 UI 제거
+if CoreGui:FindFirstChild("CubicErrorFreeUI") then CoreGui.CubicErrorFreeUI:Destroy() end
+
+-- [상태 관리]
 local states = {
-    Fly = false,
-    AutoTeleport = false,
-    Noclip = false,
-    Speed = false,
-    InfJump = false,
-    ESP = false,
-    Xray = false,
-    SkeletonESP = false,
-    HitboxExpander = false,
-    Fling = false,
-    AntiVoid = false,
-    God = false,
-    FlyNoFall = false,
-    Spider = false,
-    Allkill = false,
-    AntiCheat = true,
-    Aimbot = false,
-    WallCheck = false,
-    FPSAntiCheat = false,
-    TowerAntiCheat = false,
-    PlusAntiCheat = false,
-    AutoClick = false,
-    AntiCT = false,
-    Fullbright = false,
-    FOV = false,
-    AntiAFK = true,
-    MaxZoom = true,
+    Fly = false, AutoTeleport = false, Noclip = false, Speed = false,
+    InfJump = false, ESP = false, Xray = false, HitboxExpander = false,
+    Fling = false, AntiVoid = false, God = false, FlyNoFall = false,
+    Spider = false, Allkill = false, AntiCheat = true, Aimbot = false,
+    WallCheck = false, FPSAntiCheat = false, TowerAntiCheat = false,
+    PlusAntiCheat = false, AutoClick = false, AntiCT = false,
+    Fullbright = false, FOV = false, AntiAFK = true, MaxZoom = true,
     GravityMod = false
 }
 
--- [ 세부 속성 설정 변수 ]
 local settingsConfig = {
-    FlySpeed = 50,
-    FlyNoFallSpeed = 16,
-    AutoTeleportDistance = 50,
-    SpeedValue = 32,
-    ESPColor = Color3.fromRGB(0, 162, 255),
-    AntiVoidHeight = -50,
-    CPS = 15,
-    AutoClickKey = Enum.KeyCode.F,
-    FOVValue = 125,
-    HitboxSize = 20,
-    GravityValue = 196.2,
+    FlySpeed = 50, FlyNoFallSpeed = 16, AutoTeleportDistance = 50,
+    SpeedValue = 32, ESPColor = Color3.fromRGB(0, 162, 255),
+    AntiVoidHeight = -50, CPS = 15, AutoClickKey = Enum.KeyCode.F,
+    FOVValue = 125, HitboxSize = 20, GravityValue = 196.2,
     ThemeColor = Color3.fromRGB(0, 120, 255)
 }
 
--- [ UI 루트 생성 ]
+-- [UI 루트]
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CubicErrorFreeUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.IgnoreGuiInset = true
 pcall(function() ScreenGui.Parent = CoreGui end)
 if ScreenGui.Parent ~= CoreGui then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- [ 메인 프레임 ]
+-- [모바일 전용 토글 버튼]
+local ToggleButton
+if isMobile then
+    ToggleButton = Instance.new("TextButton")
+    ToggleButton.Name = "MenuToggle"
+    ToggleButton.Size = UDim2.new(0, 60 * uiScale, 0, 60 * uiScale)
+    ToggleButton.Position = UDim2.new(0, 12 * uiScale, 0, 12 * uiScale)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 140, 255)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.Text = "☰"
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.TextSize = 30 * uiScale
+    ToggleButton.Font = Enum.Font.GothamBold
+    ToggleButton.Parent = ScreenGui
+    local TogCorner = Instance.new("UICorner")
+    TogCorner.CornerRadius = UDim.new(1, 0)
+    TogCorner.Parent = ToggleButton
+    local TogStroke = Instance.new("UIStroke")
+    TogStroke.Color = Color3.fromRGB(255,255,255)
+    TogStroke.Transparency = 0.6
+    TogStroke.Thickness = 1.5
+    TogStroke.Parent = ToggleButton
+end
+
+-- [메인 프레임 - 중앙 정렬 및 독립 크기]
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 640, 0, 500)
-MainFrame.Position = UDim2.new(0.5, -320, 0.5, -250)
+MainFrame.Size = UDim2.new(frameW, 0, frameH, 0)
+MainFrame.Position = UDim2.new((1 - frameW) / 2, 0, (1 - frameH) / 2, 0) -- 항상 중앙
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 17, 23)
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = false
@@ -85,37 +102,30 @@ MainFrame.Parent = ScreenGui
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
-
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = settingsConfig.ThemeColor
 MainStroke.Transparency = 0.4
 MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
--- [ 완벽한 드래그 시스템 ]
+-- [드래그]
 local dragging = false
 local dragStart, startPos
-
 MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
         startPos = MainFrame.Position
-        
         input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
         end)
     end
 end)
-
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = false
     end
 end)
-
 UserInputService.InputChanged:Connect(function(input)
     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStart
@@ -123,104 +133,103 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- [ RightShift UI 토글 ]
+-- [UI 토글]
+if ToggleButton then
+    ToggleButton.MouseButton1Click:Connect(function()
+        MainFrame.Visible = not MainFrame.Visible
+    end)
+end
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.RightShift then
         MainFrame.Visible = not MainFrame.Visible
     end
 end)
 
--- [ 타이틀 바 ]
+-- [타이틀 바]
 local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 50)
+TitleBar.Size = UDim2.new(1, 0, 0, 50 * uiScale)
 TitleBar.BackgroundColor3 = Color3.fromRGB(20, 24, 33)
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
-
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 12)
 TitleCorner.Parent = TitleBar
 
 local TitleText = Instance.new("TextLabel")
-TitleText.Size = UDim2.new(0, 220, 1, 0)
-TitleText.Position = UDim2.new(0, 15, 0, 0)
+TitleText.Size = UDim2.new(0, 240 * uiScale, 1, 0)
+TitleText.Position = UDim2.new(0, 15 * uiScale, 0, 0)
 TitleText.BackgroundTransparency = 1
 TitleText.Font = Enum.Font.GothamBold
 TitleText.Text = "CUBIC <font color='#00a2ff'>ULTIMATE</font> EX"
 TitleText.RichText = true
 TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleText.TextSize = 16
+TitleText.TextSize = 16 * uiScale
 TitleText.TextXAlignment = Enum.TextXAlignment.Left
 TitleText.Parent = TitleBar
 
--- [ 우클릭 속성 설정 패널 ]
+-- [속성 패널]
 local PropertyPanel = Instance.new("Frame")
-PropertyPanel.Size = UDim2.new(0, 220, 0, 320)
-PropertyPanel.Position = UDim2.new(1, 10, 0, 0)
+PropertyPanel.Size = UDim2.new(0, 220 * uiScale, 0, 320 * uiScale)
+PropertyPanel.Position = UDim2.new(1, 10 * uiScale, 0, 0)
 PropertyPanel.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
 PropertyPanel.BorderSizePixel = 0
 PropertyPanel.Visible = false
 PropertyPanel.Parent = MainFrame
-
 local PropCorner = Instance.new("UICorner")
 PropCorner.CornerRadius = UDim.new(0, 8)
 PropCorner.Parent = PropertyPanel
-
 local PropStroke = Instance.new("UIStroke")
 PropStroke.Color = Color3.fromRGB(0, 162, 255)
 PropStroke.Thickness = 1
 PropStroke.Parent = PropertyPanel
-
 local PropTitle = Instance.new("TextLabel")
-PropTitle.Size = UDim2.new(1, 0, 0, 35)
-PropTitle.Position = UDim2.new(0, 12, 0, 0)
+PropTitle.Size = UDim2.new(1, 0, 0, 35 * uiScale)
+PropTitle.Position = UDim2.new(0, 12 * uiScale, 0, 0)
 PropTitle.BackgroundTransparency = 1
 PropTitle.Font = Enum.Font.GothamBold
 PropTitle.Text = "Feature Properties"
 PropTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-PropTitle.TextSize = 13
+PropTitle.TextSize = 13 * uiScale
 PropTitle.TextXAlignment = Enum.TextXAlignment.Left
 PropTitle.Parent = PropertyPanel
 
 local PropScroll = Instance.new("ScrollingFrame")
-PropScroll.Size = UDim2.new(1, -10, 1, -45)
-PropScroll.Position = UDim2.new(0, 5, 0, 40)
+PropScroll.Size = UDim2.new(1, -10 * uiScale, 1, -45 * uiScale)
+PropScroll.Position = UDim2.new(0, 5 * uiScale, 0, 40 * uiScale)
 PropScroll.BackgroundTransparency = 1
-PropScroll.CanvasSize = UDim2.new(0, 0, 0, 350)
+PropScroll.CanvasSize = UDim2.new(0, 0, 0, 350 * uiScale)
 PropScroll.ScrollBarThickness = 3
 PropScroll.Parent = PropertyPanel
-
 local PropLayout = Instance.new("UIListLayout")
 PropLayout.SortOrder = Enum.SortOrder.LayoutOrder
-PropLayout.Padding = UDim.new(0, 8)
+PropLayout.Padding = UDim.new(0, 8 * uiScale)
 PropLayout.Parent = PropScroll
 
 local function addPropertyRow(name, defaultVal, callback)
     local Row = Instance.new("Frame")
-    Row.Size = UDim2.new(1, -10, 0, 45)
+    Row.Size = UDim2.new(1, -10 * uiScale, 0, 45 * uiScale)
     Row.BackgroundTransparency = 1
     Row.Parent = PropScroll
 
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, 0, 0, 20)
+    Label.Size = UDim2.new(1, 0, 0, 20 * uiScale)
     Label.BackgroundTransparency = 1
     Label.Font = Enum.Font.Gotham
     Label.Text = name
     Label.TextColor3 = Color3.fromRGB(200, 210, 230)
-    Label.TextSize = 11
+    Label.TextSize = 11 * uiScale
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Row
 
     local Box = Instance.new("TextBox")
-    Box.Size = UDim2.new(1, 0, 0, 22)
-    Box.Position = UDim2.new(0, 0, 0, 20)
+    Box.Size = UDim2.new(1, 0, 0, 22 * uiScale)
+    Box.Position = UDim2.new(0, 0, 0, 20 * uiScale)
     Box.BackgroundColor3 = Color3.fromRGB(25, 30, 42)
     Box.Font = Enum.Font.GothamBold
     Box.Text = tostring(defaultVal)
     Box.TextColor3 = Color3.fromRGB(0, 162, 255)
-    Box.TextSize = 11
+    Box.TextSize = 11 * uiScale
     Box.Parent = Row
-
     local BC = Instance.new("UICorner")
     BC.CornerRadius = UDim.new(0, 4)
     BC.Parent = Box
@@ -232,55 +241,54 @@ local function addPropertyRow(name, defaultVal, callback)
 end
 
 addPropertyRow("Fly Speed", settingsConfig.FlySpeed, function(v) settingsConfig.FlySpeed = v end)
-addPropertyRow("Move Speed (Velocity)", settingsConfig.SpeedValue, function(v) settingsConfig.SpeedValue = v end)
-addPropertyRow("Hitbox Size (Def:20)", settingsConfig.HitboxSize, function(v) settingsConfig.HitboxSize = v end)
+addPropertyRow("Move Speed", settingsConfig.SpeedValue, function(v) settingsConfig.SpeedValue = v end)
+addPropertyRow("Hitbox Size", settingsConfig.HitboxSize, function(v) settingsConfig.HitboxSize = v end)
 addPropertyRow("FOV Value", settingsConfig.FOVValue, function(v) settingsConfig.FOVValue = v end)
 addPropertyRow("AutoClick CPS", settingsConfig.CPS, function(v) settingsConfig.CPS = v end)
 
--- [ 탭 시스템 ]
+-- [탭 시스템]
 local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(0, 410, 0, 32)
-TabContainer.Position = UDim2.new(0, 200, 0, 9)
+TabContainer.Size = UDim2.new(0.7, 0, 0, 32 * uiScale)
+TabContainer.Position = UDim2.new(0.3, 0, 0, 9 * uiScale)
 TabContainer.BackgroundTransparency = 1
 TabContainer.Parent = TitleBar
 
 local UIListLayoutTabs = Instance.new("UIListLayout")
 UIListLayoutTabs.FillDirection = Enum.FillDirection.Horizontal
 UIListLayoutTabs.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayoutTabs.Padding = UDim.new(0, 4)
+UIListLayoutTabs.Padding = UDim.new(0, 4 * uiScale)
 UIListLayoutTabs.Parent = TabContainer
 
 local tabContents = {}
 local function createTabButton(name, layoutOrder)
     local TabBtn = Instance.new("TextButton")
-    TabBtn.Size = UDim2.new(0, 58, 1, 0)
+    TabBtn.Size = UDim2.new(0, 58 * uiScale, 1, 0)
     TabBtn.BackgroundColor3 = layoutOrder == 1 and Color3.fromRGB(0, 140, 255) or Color3.fromRGB(25, 30, 42)
     TabBtn.Font = Enum.Font.GothamBold
     TabBtn.Text = name
     TabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TabBtn.TextSize = 10
+    TabBtn.TextSize = 10 * uiScale
     TabBtn.LayoutOrder = layoutOrder
     TabBtn.Parent = TabContainer
-
     local Corner = Instance.new("UICorner")
     Corner.CornerRadius = UDim.new(0, 6)
     Corner.Parent = TabBtn
 
     local Content = Instance.new("ScrollingFrame")
     Content.Name = name .. "Content"
-    Content.Size = UDim2.new(1, -20, 1, -70)
-    Content.Position = UDim2.new(0, 10, 0, 60)
+    Content.Size = UDim2.new(1, -20 * uiScale, 1, -70 * uiScale)
+    Content.Position = UDim2.new(0, 10 * uiScale, 0, 60 * uiScale)
     Content.BackgroundTransparency = 1
     Content.BorderSizePixel = 0
-    Content.CanvasSize = UDim2.new(0, 0, 0, 1000)
+    Content.CanvasSize = UDim2.new(0, 0, 0, 1000 * uiScale)
     Content.ScrollBarThickness = 4
     Content.ScrollBarImageColor3 = Color3.fromRGB(0, 162, 255)
     Content.Visible = (layoutOrder == 1)
     Content.Parent = MainFrame
 
     local Grid = Instance.new("UIGridLayout")
-    Grid.CellSize = UDim2.new(0, 285, 0, 75)
-    Grid.CellPadding = UDim2.new(0, 16, 0, 16)
+    Grid.CellSize = UDim2.new(0.46, 0, 0, 75 * uiScale)
+    Grid.CellPadding = UDim2.new(0, 12 * uiScale, 0, 12 * uiScale)
     Grid.Parent = Content
 
     tabContents[name] = Content
@@ -305,7 +313,7 @@ local ACTab = createTabButton("AntiCheat", 4)
 local UtilTab = createTabButton("Utility", 5)
 local ConfigTab = createTabButton("Config", 6)
 
--- [ 기능 카드 생성 ]
+-- [기능 카드]
 local function createFeatureCard(parentTab, name, desc, featureKey, defaultState)
     local Card = Instance.new("TextButton")
     Card.Name = name
@@ -325,31 +333,31 @@ local function createFeatureCard(parentTab, name, desc, featureKey, defaultState
     Stroke.Parent = Card
 
     local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1, -60, 0, 22)
-    Title.Position = UDim2.new(0, 12, 0, 10)
+    Title.Size = UDim2.new(1, -80 * uiScale, 0, 22 * uiScale)
+    Title.Position = UDim2.new(0, 12 * uiScale, 0, 10 * uiScale)
     Title.BackgroundTransparency = 1
     Title.Font = Enum.Font.GothamBold
     Title.Text = name
     Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.TextSize = 13
+    Title.TextSize = 13 * uiScale
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.Parent = Card
 
     local Description = Instance.new("TextLabel")
-    Description.Size = UDim2.new(1, -60, 0, 30)
-    Description.Position = UDim2.new(0, 12, 0, 32)
+    Description.Size = UDim2.new(1, -80 * uiScale, 0, 30 * uiScale)
+    Description.Position = UDim2.new(0, 12 * uiScale, 0, 32 * uiScale)
     Description.BackgroundTransparency = 1
     Description.Font = Enum.Font.Gotham
     Description.Text = desc
     Description.TextColor3 = Color3.fromRGB(130, 140, 160)
-    Description.TextSize = 10
+    Description.TextSize = 10 * uiScale
     Description.TextWrapped = true
     Description.TextXAlignment = Enum.TextXAlignment.Left
     Description.Parent = Card
 
     local ToggleBtn = Instance.new("TextButton")
-    ToggleBtn.Size = UDim2.new(0, 42, 0, 24)
-    ToggleBtn.Position = UDim2.new(1, -54, 0, 14)
+    ToggleBtn.Size = UDim2.new(0, 36 * uiScale, 0, 20 * uiScale)
+    ToggleBtn.Position = UDim2.new(1, -44 * uiScale, 0, 14 * uiScale)
     ToggleBtn.BackgroundColor3 = defaultState and Color3.fromRGB(0, 162, 255) or Color3.fromRGB(35, 42, 58)
     ToggleBtn.AutoButtonColor = false
     ToggleBtn.Text = ""
@@ -360,106 +368,110 @@ local function createFeatureCard(parentTab, name, desc, featureKey, defaultState
     ToggleCorner.Parent = ToggleBtn
 
     local Circle = Instance.new("Frame")
-    Circle.Size = UDim2.new(0, 18, 0, 18)
-    Circle.Position = defaultState and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
+    Circle.Size = UDim2.new(0, 16 * uiScale, 0, 16 * uiScale)
+    Circle.Position = defaultState and UDim2.new(1, -18 * uiScale, 0.5, -8 * uiScale) or UDim2.new(0, 3 * uiScale, 0.5, -8 * uiScale)
     Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Circle.Parent = ToggleBtn
-
     local CircleCorner = Instance.new("UICorner")
     CircleCorner.CornerRadius = UDim.new(1, 0)
     CircleCorner.Parent = Circle
+
+    local PropBtn = Instance.new("TextButton")
+    PropBtn.Size = UDim2.new(0, 20 * uiScale, 0, 20 * uiScale)
+    PropBtn.Position = UDim2.new(1, -68 * uiScale, 0, 14 * uiScale)
+    PropBtn.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+    PropBtn.Text = "⚙"
+    PropBtn.TextColor3 = Color3.fromRGB(200, 210, 230)
+    PropBtn.TextSize = 11 * uiScale
+    PropBtn.Font = Enum.Font.Gotham
+    PropBtn.AutoButtonColor = false
+    PropBtn.Parent = Card
+    local PropCorner2 = Instance.new("UICorner")
+    PropCorner2.CornerRadius = UDim.new(0, 4)
+    PropCorner2.Parent = PropBtn
 
     local function triggerToggle()
         states[featureKey] = not states[featureKey]
         local isActive = states[featureKey]
         TweenService:Create(ToggleBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = isActive and Color3.fromRGB(0, 162, 255) or Color3.fromRGB(35, 42, 58)}):Play()
-        TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = isActive and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)}):Play()
+        TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = isActive and UDim2.new(1, -18 * uiScale, 0.5, -8 * uiScale) or UDim2.new(0, 3 * uiScale, 0.5, -8 * uiScale)}):Play()
         TweenService:Create(Stroke, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Color = isActive and Color3.fromRGB(0, 162, 255) or Color3.fromRGB(40, 48, 66)}):Play()
     end
 
     ToggleBtn.MouseButton1Click:Connect(triggerToggle)
-    Card.MouseButton2Click:Connect(function()
-        PropertyPanel.Visible = not PropertyPanel.Visible
-    end)
+    Card.MouseButton2Click:Connect(function() PropertyPanel.Visible = not PropertyPanel.Visible end)
+    PropBtn.MouseButton1Click:Connect(function() PropertyPanel.Visible = not PropertyPanel.Visible end)
 end
 
--- [ 카드 배치 ]
-createFeatureCard(MainTab, "Fly", "360도 자유 비행 (우클릭: 속성)", "Fly", false)
-createFeatureCard(MainTab, "Auto-Teleport", "가장 가까운 대상 추적 텔레포트", "AutoTeleport", false)
-createFeatureCard(MainTab, "Noclip", "벽 통과 모드 활성화", "Noclip", false)
-createFeatureCard(MainTab, "Speed", "애니메이션 고정 이동 속도 부스트 (우클릭: 속성)", "Speed", false)
-createFeatureCard(MainTab, "InfJump", "무한 공중 점프 가능", "InfJump", false)
-createFeatureCard(MainTab, "Fling", "상대방 고속 물리 플링 유도", "Fling", false)
-createFeatureCard(MainTab, "AntiVoid", "공허 추락 방지 및 상공 복구", "AntiVoid", false)
-createFeatureCard(MainTab, "FlyNoFall", "낙하 시 수평 비행 고정 (낙뎀 방지)", "FlyNoFall", false)
-createFeatureCard(MainTab, "Spider", "벽 자동 등반 모드 활성화", "Spider", false)
+createFeatureCard(MainTab, "Fly", "자유 비행", "Fly", false)
+createFeatureCard(MainTab, "Auto-Teleport", "추적 텔레포트", "AutoTeleport", false)
+createFeatureCard(MainTab, "Noclip", "벽 통과", "Noclip", false)
+createFeatureCard(MainTab, "Speed", "이속 부스트", "Speed", false)
+createFeatureCard(MainTab, "InfJump", "무한 점프", "InfJump", false)
+createFeatureCard(MainTab, "Fling", "플링", "Fling", false)
+createFeatureCard(MainTab, "AntiVoid", "추락 방지", "AntiVoid", false)
+createFeatureCard(MainTab, "FlyNoFall", "낙뎀 방지", "FlyNoFall", false)
+createFeatureCard(MainTab, "Spider", "벽 등반", "Spider", false)
 
-createFeatureCard(CombatTab, "Aimbot", "적 머리 자동 조준 시스템", "Aimbot", false)
-createFeatureCard(CombatTab, "WallCheck", "장애물 뒤 적 감지 차단", "WallCheck", false)
-createFeatureCard(CombatTab, "Hitbox Expander", "피격 범위 확장 (기본값: 20)", "HitboxExpander", false)
-createFeatureCard(CombatTab, "God Mode", "체력 무한 불사신 모드", "God", false)
-createFeatureCard(CombatTab, "Allkill", "주변 모든 플레이어 즉시 처치", "Allkill", false)
+createFeatureCard(CombatTab, "Aimbot", "자동 조준", "Aimbot", false)
+createFeatureCard(CombatTab, "WallCheck", "벽 체크", "WallCheck", false)
+createFeatureCard(CombatTab, "Hitbox Expander", "히트박스 확장", "HitboxExpander", false)
+createFeatureCard(CombatTab, "God Mode", "불사신", "God", false)
+createFeatureCard(CombatTab, "Allkill", "전체 처치", "Allkill", false)
 
-createFeatureCard(VisualTab, "Advanced ESP + Tracert", "프리미엄 3D 박스, 트레이서트 선 및 체력바 표시", "ESP", false)
-createFeatureCard(VisualTab, "Xray", "완벽 복구 가능한 맵 투시 모드", "Xray", false)
-createFeatureCard(VisualTab, "Fullbright", "어두운 맵 밝기 최대화", "Fullbright", false)
-createFeatureCard(VisualTab, "FOV Changer", "시야각 확장 고정 (우클릭: 속성)", "FOV", false)
+createFeatureCard(VisualTab, "ESP + Tracert", "ESP + 트레이서트", "ESP", false)
+createFeatureCard(VisualTab, "Xray", "투시", "Xray", false)
+createFeatureCard(VisualTab, "Fullbright", "밝기 최대", "Fullbright", false)
+createFeatureCard(VisualTab, "FOV Changer", "시야각 변경", "FOV", false)
 
-createFeatureCard(ACTab, "Anti-Cheat", "일반 안티치트 후킹 바이패스", "AntiCheat", true)
-createFeatureCard(ACTab, "FPS AntiCheat", "FPS 전용 안티치트 방어", "FPSAntiCheat", false)
-createFeatureCard(ACTab, "Tower AntiCheat", "타워 게임 안티치트 무력화", "TowerAntiCheat", false)
-createFeatureCard(ACTab, "Plus AntiCheat", "고도화된 추가 안티치트 우회", "PlusAntiCheat", false)
+createFeatureCard(ACTab, "Anti-Cheat", "AC 바이패스", "AntiCheat", true)
+createFeatureCard(ACTab, "FPS AntiCheat", "FPS AC", "FPSAntiCheat", false)
+createFeatureCard(ACTab, "Tower AntiCheat", "Tower AC", "TowerAntiCheat", false)
+createFeatureCard(ACTab, "Plus AntiCheat", "추가 AC", "PlusAntiCheat", false)
 
-createFeatureCard(UtilTab, "AutoClicker", "F키 토글 연타 오토클릭 (우클릭: CPS)", "AutoClick", false)
-createFeatureCard(UtilTab, "AntiCT", "스킬/아이템 쿨타임/디바운스 우회", "AntiCT", false)
-createFeatureCard(UtilTab, "Anti-AFK", "잠수 방지 (자동 튕김 차단)", "AntiAFK", true)
-createFeatureCard(UtilTab, "Max Zoom", "카메라 최대/최소 줌 제한 해제", "MaxZoom", true)
-createFeatureCard(UtilTab, "Gravity Mod", "중력 감소 (달 위를 걷는 느낌)", "GravityMod", false)
+createFeatureCard(UtilTab, "AutoClicker", "오토클릭", "AutoClick", false)
+createFeatureCard(UtilTab, "AntiCT", "쿨타임 우회", "AntiCT", false)
+createFeatureCard(UtilTab, "Anti-AFK", "잠수 방지", "AntiAFK", true)
+createFeatureCard(UtilTab, "Max Zoom", "줌 해제", "MaxZoom", true)
+createFeatureCard(UtilTab, "Gravity Mod", "중력 변경", "GravityMod", false)
 
--- [ Config 탭 내부 UI 구현 (실시간 목록 리스트 추가) ]
+-- [Config 탭]
 local ConfigLayout = ConfigTab:FindFirstChildOfClass("UIGridLayout")
 if ConfigLayout then ConfigLayout:Destroy() end
-
 local ConfigListLayout = Instance.new("UIListLayout")
 ConfigListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ConfigListLayout.Padding = UDim.new(0, 10)
+ConfigListLayout.Padding = UDim.new(0, 10 * uiScale)
 ConfigListLayout.Parent = ConfigTab
 
--- 설정 파일 이름 입력 박스
 local ConfigInputBox = Instance.new("TextBox")
-ConfigInputBox.Size = UDim2.new(1, 0, 0, 35)
+ConfigInputBox.Size = UDim2.new(1, 0, 0, 35 * uiScale)
 ConfigInputBox.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
 ConfigInputBox.Font = Enum.Font.GothamBold
 ConfigInputBox.PlaceholderText = "Enter Config Name..."
 ConfigInputBox.Text = "my_config"
 ConfigInputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 ConfigInputBox.PlaceholderColor3 = Color3.fromRGB(100, 110, 130)
-ConfigInputBox.TextSize = 12
+ConfigInputBox.TextSize = 12 * uiScale
 ConfigInputBox.Parent = ConfigTab
-
 local CBoxCorner = Instance.new("UICorner")
 CBoxCorner.CornerRadius = UDim.new(0, 6)
 CBoxCorner.Parent = ConfigInputBox
-
 local CBoxStroke = Instance.new("UIStroke")
 CBoxStroke.Color = Color3.fromRGB(40, 48, 66)
 CBoxStroke.Parent = ConfigInputBox
 
--- 버튼 생성 헬퍼 함수
 local function createConfigButton(name, color, callback)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 35)
+    btn.Size = UDim2.new(1, 0, 0, 35 * uiScale)
     btn.BackgroundColor3 = color
     btn.Font = Enum.Font.GothamBold
     btn.Text = name
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 12
+    btn.TextSize = 12 * uiScale
     btn.Parent = ConfigTab
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 6)
     corner.Parent = btn
-
     btn.MouseButton1Click:Connect(callback)
     return btn
 end
@@ -469,32 +481,26 @@ local function ensureFolder()
     return false
 end
 
--- 저장된 파일 리스트를 표시해줄 하단 스크롤 프레임 컨테이너
 local FileListContainer = Instance.new("ScrollingFrame")
-FileListContainer.Size = UDim2.new(1, 0, 0, 160)
+FileListContainer.Size = UDim2.new(1, 0, 0, 160 * uiScale)
 FileListContainer.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
 FileListContainer.BorderSizePixel = 0
 FileListContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
 FileListContainer.ScrollBarThickness = 4
 FileListContainer.Parent = ConfigTab
-
 local FileListCorner = Instance.new("UICorner")
 FileListCorner.CornerRadius = UDim.new(0, 6)
 FileListCorner.Parent = FileListContainer
-
 local FileListLayout = Instance.new("UIListLayout")
 FileListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-FileListLayout.Padding = UDim.new(0, 5)
+FileListLayout.Padding = UDim.new(0, 5 * uiScale)
 FileListLayout.Parent = FileListContainer
 
--- 실시간 설정 파일 목록 갱신 함수
 local function refreshConfigList()
     for _, child in pairs(FileListContainer:GetChildren()) do
         if child:IsA("TextButton") then child:Destroy() end
     end
-    
     if not ensureFolder() then return end
-    
     local success, files = pcall(function() return listfiles("CubicConfigs") end)
     if success and files then
         local count = 0
@@ -502,29 +508,25 @@ local function refreshConfigList()
             if filePath:sub(-5) == ".json" then
                 count = count + 1
                 local fileName = filePath:match("([^/]+)$"):gsub("%.json$", "")
-                
                 local fileBtn = Instance.new("TextButton")
-                fileBtn.Size = UDim2.new(1, -10, 0, 30)
-                fileBtn.Position = UDim2.new(0, 5, 0, 0)
+                fileBtn.Size = UDim2.new(1, -10 * uiScale, 0, 30 * uiScale)
+                fileBtn.Position = UDim2.new(0, 5 * uiScale, 0, 0)
                 fileBtn.BackgroundColor3 = Color3.fromRGB(25, 30, 42)
                 fileBtn.Font = Enum.Font.Gotham
                 fileBtn.Text = "📁  " .. fileName
                 fileBtn.TextColor3 = Color3.fromRGB(220, 230, 250)
-                fileBtn.TextSize = 11
+                fileBtn.TextSize = 11 * uiScale
                 fileBtn.TextXAlignment = Enum.TextXAlignment.Left
                 fileBtn.Parent = FileListContainer
-                
                 local fCorner = Instance.new("UICorner")
                 fCorner.CornerRadius = UDim.new(0, 4)
                 fCorner.Parent = fileBtn
-                
-                -- 리스트 항목 클릭 시 입력창에 이름 자동 입력
                 fileBtn.MouseButton1Click:Connect(function()
                     ConfigInputBox.Text = fileName
                 end)
             end
         end
-        FileListContainer.CanvasSize = UDim2.new(0, 0, 0, count * 35)
+        FileListContainer.CanvasSize = UDim2.new(0, 0, 0, count * 35 * uiScale)
     end
 end
 
@@ -532,12 +534,7 @@ createConfigButton("Save Config", Color3.fromRGB(0, 140, 255), function()
     if not ensureFolder() then return end
     local name = ConfigInputBox.Text
     if name == "" then name = "default" end
-    
-    local saveData = {
-        States = states,
-        Settings = settingsConfig
-    }
-    
+    local saveData = { States = states, Settings = settingsConfig }
     pcall(function()
         writefile("CubicConfigs/" .. name .. ".json", HttpService:JSONEncode(saveData))
         refreshConfigList()
@@ -548,7 +545,6 @@ createConfigButton("Load Config", Color3.fromRGB(40, 160, 80), function()
     if not ensureFolder() then return end
     local name = ConfigInputBox.Text
     local filePath = "CubicConfigs/" .. name .. ".json"
-    
     pcall(function()
         if isfile(filePath) then
             local raw = readfile(filePath)
@@ -571,7 +567,6 @@ createConfigButton("Delete Config", Color3.fromRGB(200, 50, 50), function()
     if not ensureFolder() then return end
     local name = ConfigInputBox.Text
     local filePath = "CubicConfigs/" .. name .. ".json"
-    
     pcall(function()
         if isfile(filePath) then
             delfile(filePath)
@@ -580,60 +575,57 @@ createConfigButton("Delete Config", Color3.fromRGB(200, 50, 50), function()
     end)
 end)
 
--- 초기 로드 시 파일 목록 갱신 실행
 task.spawn(refreshConfigList)
 
-
 --[================================================================]--
---  엔진 로직 구동 부
+--  엔진 로직 (모든 기능 포함)
 --[================================================================]--
 
--- 안티치트 디스에이블 루프 (최적화: Throttle 적용)
-local acTimer = 0
-RunService.Stepped:Connect(function(dt)
-    if not (states.AntiCheat or states.FPSAntiCheat or states.TowerAntiCheat or states.PlusAntiCheat) then return end
-    acTimer = acTimer + dt
-    if acTimer < 1 then return end
-    acTimer = 0
-    
-    local char = LocalPlayer.Character
-    if char then
-        for _, scriptObj in ipairs(char:GetDescendants()) do
-            if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac")) then
-                pcall(function() scriptObj.Disabled = true end)
-            end
+local function disableACScripts(char)
+    if not char then return end
+    task.wait(0.5)
+    for _, scriptObj in ipairs(char:GetDescendants()) do
+        if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac")) then
+            pcall(function() scriptObj.Disabled = true end)
         end
     end
-end)
+end
+LocalPlayer.CharacterAdded:Connect(disableACScripts)
+if LocalPlayer.Character then disableACScripts(LocalPlayer.Character) end
 
--- 플라이 기능 (물리 속도 안정화)
+-- 플라이
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
     local root = char.HumanoidRootPart
     local hum = char.Humanoid
-
     if states.Fly then
         hum.PlatformStand = true
         local camCF = Camera.CFrame
+        local forward = camCF.LookVector * Vector3.new(1,0,1)
+        local right = camCF.RightVector * Vector3.new(1,0,1)
+        if forward.Magnitude > 0 then forward = forward.Unit end
+        if right.Magnitude > 0 then right = right.Unit end
         local moveDir = Vector3.new()
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
         if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
+        local stick = hum.MoveDirection
+        if stick.Magnitude > 0.1 then
+            moveDir = moveDir + (forward * stick.Z) + (right * stick.X)
+        end
         if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
         if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
-
+        if moveDir.Magnitude > 0 then moveDir = moveDir.Unit end
         root.AssemblyLinearVelocity = moveDir * settingsConfig.FlySpeed
         root.CFrame = CFrame.new(root.Position, root.Position + camCF.LookVector)
     else
-        if hum.PlatformStand and not states.Noclip then
-            hum.PlatformStand = false
-        end
+        if hum.PlatformStand and not states.Noclip then hum.PlatformStand = false end
     end
 end)
 
--- 자동 텔레포트
+-- AutoTeleport
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -643,7 +635,6 @@ task.spawn(function()
                 local myPos = char.HumanoidRootPart.Position
                 local closestDist = settingsConfig.AutoTeleportDistance
                 local targetRoot = nil
-
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
                         local dist = (myPos - p.Character.HumanoidRootPart.Position).Magnitude
@@ -653,17 +644,15 @@ task.spawn(function()
                         end
                     end
                 end
-                if targetRoot then 
-                    pcall(function()
-                        char.HumanoidRootPart.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3) 
-                    end)
+                if targetRoot then
+                    pcall(function() char.HumanoidRootPart.CFrame = targetRoot.CFrame * CFrame.new(0,0,3) end)
                 end
             end
         end
     end
 end)
 
--- 노클립 (충돌 제거)
+-- Noclip
 RunService.Stepped:Connect(function()
     if states.Noclip then
         local char = LocalPlayer.Character
@@ -675,15 +664,13 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- 애니메이션 속도는 16으로 유지하고 물리 속도만 증가하는 방식 적용
+-- Speed + Gravity
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
         local hum = char.Humanoid
         local root = char.HumanoidRootPart
-        
         hum.WalkSpeed = 16
-        
         if states.Speed and hum.MoveDirection.Magnitude > 0 then
             local currentVel = root.AssemblyLinearVelocity
             root.AssemblyLinearVelocity = Vector3.new(hum.MoveDirection.X * settingsConfig.SpeedValue, currentVel.Y, hum.MoveDirection.Z * settingsConfig.SpeedValue)
@@ -692,7 +679,7 @@ RunService.RenderStepped:Connect(function()
     Workspace.Gravity = states.GravityMod and 50 or settingsConfig.GravityValue
 end)
 
--- 무한 점프
+-- InfJump
 UserInputService.JumpRequest:Connect(function()
     if states.InfJump then
         local char = LocalPlayer.Character
@@ -702,7 +689,7 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- 플링 (물리 충돌 가속)
+-- Fling
 RunService.Heartbeat:Connect(function()
     if states.Fling then
         local char = LocalPlayer.Character
@@ -712,7 +699,7 @@ RunService.Heartbeat:Connect(function()
                 if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                     pcall(function()
                         myRoot.CFrame = p.Character.HumanoidRootPart.CFrame
-                        p.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(99999, 99999, 99999)
+                        p.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(99999,99999,99999)
                     end)
                 end
             end
@@ -720,20 +707,20 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- 안티보이드 (추락 방지)
+-- AntiVoid
 RunService.RenderStepped:Connect(function()
     if states.AntiVoid then
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
             if char.HumanoidRootPart.Position.Y < settingsConfig.AntiVoidHeight then
-                char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
                 char.HumanoidRootPart.CFrame = CFrame.new(char.HumanoidRootPart.Position.X, 50, char.HumanoidRootPart.Position.Z)
             end
         end
     end
 end)
 
--- 갓 모드 (체력 무한)
+-- God
 RunService.Stepped:Connect(function()
     if states.God then
         local char = LocalPlayer.Character
@@ -744,7 +731,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- 낙뎀 방지 비행 (FlyNoFall)
+-- FlyNoFall
 local autoNoFallActive = false
 local lockedFlightY = 0
 task.spawn(function()
@@ -757,7 +744,7 @@ task.spawn(function()
                 local rayParams = RaycastParams.new()
                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
                 rayParams.FilterDescendantsInstances = {char}
-                local rayResult = Workspace:Raycast(root.Position, Vector3.new(0, -6, 0), rayParams)
+                local rayResult = Workspace:Raycast(root.Position, Vector3.new(0,-6,0), rayParams)
                 if root.AssemblyLinearVelocity.Y < -25 and not rayResult and not autoNoFallActive then
                     autoNoFallActive = true
                     lockedFlightY = root.Position.Y
@@ -777,11 +764,9 @@ RunService.RenderStepped:Connect(function()
         if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
             char.Humanoid.PlatformStand = true
             char.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(char.HumanoidRootPart.Position.X, lockedFlightY, char.HumanoidRootPart.Position.Z))
-            char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
         end
     end
-
-    -- 스파이더 (벽 등반)
     if states.Spider then
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
@@ -790,13 +775,13 @@ RunService.RenderStepped:Connect(function()
             rayParams.FilterDescendantsInstances = {char}
             local rayResult = Workspace:Raycast(char.HumanoidRootPart.Position, char.HumanoidRootPart.CFrame.LookVector * 3, rayParams)
             if rayResult and rayResult.Instance then
-                char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 30, 0)
+                char.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0,30,0)
             end
         end
     end
 end)
 
--- 올킬 (전체 처치)
+-- Allkill
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -810,7 +795,7 @@ task.spawn(function()
     end
 end)
 
--- 히트박스 확장 (정밀 크기 제어)
+-- Hitbox Expander
 RunService.RenderStepped:Connect(function()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -820,14 +805,14 @@ RunService.RenderStepped:Connect(function()
                 hrp.Transparency = 0.7
                 hrp.CanCollide = false
             else
-                hrp.Size = Vector3.new(2, 2, 1)
+                hrp.Size = Vector3.new(2,2,1)
                 hrp.Transparency = 1
             end
         end
     end
 end)
 
--- 에임봇 및 월체크
+-- Aimbot + WallCheck
 RunService.RenderStepped:Connect(function()
     if states.Aimbot then
         local char = LocalPlayer.Character
@@ -856,24 +841,19 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- [오토클릭 개선 관리 시스템]
+-- AutoClick
 UserInputService.InputBegan:Connect(function(input, gp)
     if not gp and input.KeyCode == settingsConfig.AutoClickKey then
         states.AutoClick = not states.AutoClick
     end
 end)
-
 task.spawn(function()
     while true do
         if states.AutoClick then
             pcall(function()
-                if mouse1click then
-                    mouse1click()
-                else
-                    VirtualUser:Button1Down(Vector2.new(0, 0), Camera.CFrame)
-                    task.wait(0.02)
-                    VirtualUser:Button1Up(Vector2.new(0, 0), Camera.CFrame)
-                end
+                VirtualUser:Button1Down(Vector2.new(0,0), Camera.CFrame)
+                task.wait(0.02)
+                VirtualUser:Button1Up(Vector2.new(0,0), Camera.CFrame)
             end)
             task.wait(1 / settingsConfig.CPS)
         else
@@ -882,7 +862,7 @@ task.spawn(function()
     end
 end)
 
--- 안티 CT 및 쿨타임 우회
+-- AntiCT
 RunService.Stepped:Connect(function()
     if states.AntiCT then
         local char = LocalPlayer.Character
@@ -894,7 +874,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- 안티 AFK (잠수 방지)
+-- AntiAFK
 LocalPlayer.Idled:Connect(function()
     if states.AntiAFK then
         pcall(function()
@@ -905,7 +885,7 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
--- 줌, 풀브라이트, FOV
+-- Zoom, Fullbright, FOV
 RunService.RenderStepped:Connect(function()
     if states.MaxZoom then
         LocalPlayer.CameraMaxZoomDistance = 999999
@@ -919,7 +899,7 @@ RunService.RenderStepped:Connect(function()
     Camera.FieldOfView = states.FOV and settingsConfig.FOVValue or 70
 end)
 
--- [완벽 복구 가능한 Xray 시스템]
+-- Xray
 local xrayCache = {}
 RunService.RenderStepped:Connect(function()
     if states.Xray then
@@ -933,95 +913,77 @@ RunService.RenderStepped:Connect(function()
                     end
                 end
                 if not isPlayerPart then
-                    if not xrayCache[obj] then
-                        xrayCache[obj] = obj.Transparency
-                    end
-                    if obj.Transparency < 0.65 then
-                        obj.Transparency = 0.65
-                    end
+                    if not xrayCache[obj] then xrayCache[obj] = obj.Transparency end
+                    if obj.Transparency < 0.65 then obj.Transparency = 0.65 end
                 end
             end
         end
     else
         if next(xrayCache) then
             for obj, origTrans in pairs(xrayCache) do
-                if obj and obj.Parent then
-                    obj.Transparency = origTrans
-                end
+                if obj and obj.Parent then obj.Transparency = origTrans end
             end
             xrayCache = {}
         end
     end
 end)
 
--- [프리미엄 ESP 박스 + 명확한 트레이서트 선 및 인포 시스템]
+-- ESP + Tracert
 local espCache = {}
-
 local function setupESP(p)
     if p == LocalPlayer then return end
-    
     local function apply(char)
         if not char then return end
-        if espCache[p] then 
-            pcall(function() 
+        if espCache[p] then
+            pcall(function()
                 if espCache[p].Highlight then espCache[p].Highlight:Destroy() end
                 if espCache[p].Billboard then espCache[p].Billboard:Destroy() end
                 if espCache[p].TracePart then espCache[p].TracePart:Destroy() end
             end)
         end
-        
-        -- HighLight
         local hl = Instance.new("Highlight")
         hl.Name = "CubicESP"
         hl.Adornee = char
         hl.FillColor = settingsConfig.ESPColor
-        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        hl.OutlineColor = Color3.fromRGB(255,255,255)
         hl.FillTransparency = 0.4
         hl.OutlineTransparency = 0
         hl.Enabled = states.ESP
         hl.Parent = char
-        
-        -- 정보 표시 BillboardGui
         local bg = Instance.new("BillboardGui")
         bg.Name = "CubicESPInfo"
-        bg.Size = UDim2.new(0, 150, 0, 50)
-        bg.StudsOffset = Vector3.new(0, 3, 0)
+        bg.Size = UDim2.new(0,150,0,50)
+        bg.StudsOffset = Vector3.new(0,3,0)
         bg.AlwaysOnTop = true
         bg.Enabled = states.ESP
-        bg.Parent = char:WaitForChild("Head", 5) or char
-        
+        bg.Parent = char:WaitForChild("Head",5) or char
         local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, 0, 0, 20)
+        nameLabel.Size = UDim2.new(1,0,0,20)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Font = Enum.Font.GothamBold
         nameLabel.Text = p.Name
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextColor3 = Color3.fromRGB(255,255,255)
         nameLabel.TextSize = 12
         nameLabel.TextStrokeTransparency = 0.5
         nameLabel.Parent = bg
-        
         local infoLabel = Instance.new("TextLabel")
-        infoLabel.Size = UDim2.new(1, 0, 0, 20)
-        infoLabel.Position = UDim2.new(0, 0, 0, 18)
+        infoLabel.Size = UDim2.new(1,0,0,20)
+        infoLabel.Position = UDim2.new(0,0,0,18)
         infoLabel.BackgroundTransparency = 1
         infoLabel.Font = Enum.Font.Gotham
         infoLabel.Text = "[Health: 100]"
-        infoLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+        infoLabel.TextColor3 = Color3.fromRGB(0,255,100)
         infoLabel.TextSize = 10
         infoLabel.TextStrokeTransparency = 0.5
         infoLabel.Parent = bg
-
-        -- 트레이서트 선을 위한 빔 구성
         local tracePart = Instance.new("Part")
-        tracePart.Size = Vector3.new(0.1, 0.1, 0.1)
+        tracePart.Size = Vector3.new(0.1,0.1,0.1)
         tracePart.Transparency = 1
         tracePart.CanCollide = false
         tracePart.Anchored = true
         tracePart.Parent = Workspace
-        
         local att0 = Instance.new("Attachment", Workspace.Terrain)
         local att1 = Instance.new("Attachment", tracePart)
-        
         local beam = Instance.new("Beam")
         beam.Color = ColorSequence.new(settingsConfig.ESPColor)
         beam.Width0 = 0.12
@@ -1032,17 +994,14 @@ local function setupESP(p)
         beam.Attachment1 = att1
         beam.Enabled = states.ESP
         beam.Parent = tracePart
-
         espCache[p] = {Highlight = hl, Billboard = bg, InfoLabel = infoLabel, TracePart = tracePart, Beam = beam, Att0 = att0, Att1 = att1}
     end
-    
     p.CharacterAdded:Connect(apply)
     if p.Character then apply(p.Character) end
 end
-
 local function removeESP(p)
     if espCache[p] then
-        pcall(function() 
+        pcall(function()
             if espCache[p].Highlight then espCache[p].Highlight:Destroy() end
             if espCache[p].Billboard then espCache[p].Billboard:Destroy() end
             if espCache[p].TracePart then espCache[p].TracePart:Destroy() end
@@ -1050,15 +1009,17 @@ local function removeESP(p)
         espCache[p] = nil
     end
 end
-
 for _, p in ipairs(Players:GetPlayers()) do setupESP(p) end
 Players.PlayerAdded:Connect(setupESP)
 Players.PlayerRemoving:Connect(removeESP)
 
-RunService.RenderStepped:Connect(function()
+local espUpdateTimer = 0
+RunService.Heartbeat:Connect(function(dt)
+    espUpdateTimer = espUpdateTimer + dt
+    if espUpdateTimer < 0.08 then return end
+    espUpdateTimer = 0
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    
     for p, data in pairs(espCache) do
         if data and data.Highlight and data.Beam then
             data.Highlight.Enabled = states.ESP
@@ -1066,15 +1027,12 @@ RunService.RenderStepped:Connect(function()
             data.Beam.Enabled = states.ESP
             data.Beam.Color = ColorSequence.new(settingsConfig.ESPColor)
             data.Billboard.Enabled = states.ESP
-            
             if states.ESP and myRoot and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") then
                 local targetRoot = p.Character.HumanoidRootPart
                 local hum = p.Character.Humanoid
-                
                 data.TracePart.Position = targetRoot.Position
-                data.Att0.WorldPosition = myRoot.Position - Vector3.new(0, 2, 0)
+                data.Att0.WorldPosition = myRoot.Position - Vector3.new(0,2,0)
                 data.Att1.WorldPosition = targetRoot.Position
-                
                 local dist = math.floor((myRoot.Position - targetRoot.Position).Magnitude)
                 local hp = math.floor(hum.Health)
                 data.InfoLabel.Text = dist .. " studs | HP: " .. hp
