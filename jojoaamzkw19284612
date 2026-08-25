@@ -1,4 +1,4 @@
--- [최종 균형 수정본] PC/모바일 프레임과 내부 버튼 크기 완전 분리
+-- [최종 모바일 축소 수정본] 모바일 프레임 80%/72%, 스케일 1.0~1.3 제한
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local ScreenSize = Camera.ViewportSize
 
--- [디바이스 감지 및 크기 전략 분리]
+-- [디바이스 감지 및 크기 전략 분리 (모바일 축소)]
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local screenW = ScreenSize.X
 
@@ -22,12 +22,12 @@ local frameW   -- 프레임 너비 비율
 local frameH   -- 프레임 높이 비율
 
 if isMobile then
-    -- 모바일: 프레임을 적당히(85%) 줄이고, 내부 버튼은 터치를 위해 크게(1.1~1.6배)
-    frameW = 0.85
-    frameH = 0.78
-    uiScale = math.clamp(screenW / 700, 1.1, 1.6)
+    -- 모바일: 프레임을 80%/72%로 적당히 줄이고, 내부 버튼은 1.0~1.3배로 제한
+    frameW = 0.80
+    frameH = 0.72
+    uiScale = math.clamp(screenW / 800, 1.0, 1.3)
 else
-    -- PC: 프레임을 작게(48%) 유지하고, 내부 버튼은 적당한 크기(0.7~1.2배)
+    -- PC: 프레임 48%/65%, 내부 버튼 0.7~1.2배
     frameW = 0.48
     frameH = 0.65
     uiScale = math.clamp(screenW / 1800, 0.7, 1.2)
@@ -89,14 +89,14 @@ if isMobile then
     TogStroke.Parent = ToggleButton
 end
 
--- [메인 프레임 - 중앙 정렬 및 독립 크기]
+-- [메인 프레임 - 중앙 정렬, 넘침 방지 활성화]
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(frameW, 0, frameH, 0)
 MainFrame.Position = UDim2.new((1 - frameW) / 2, 0, (1 - frameH) / 2, 0) -- 항상 중앙
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 17, 23)
 MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = false
+MainFrame.ClipsDescendants = true  -- ★ 내부 요소가 절대 프레임 밖으로 나가지 않도록 차단
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
