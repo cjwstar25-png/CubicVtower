@@ -1,4 +1,4 @@
--- [최종] ChatSpam 제거 + 모든 안티치트/서버 무시 기본 탑재
+-- [최종 확정] 모든 기능 포함 + BadWars 킬아우라/플라이 완전 수정 (속도 비간섭 + 몸 회전 + 플라이 재구현)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -12,7 +12,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local ScreenSize = Camera.ViewportSize
-local Mouse = LocalPlayer:GetMouse()
 
 pcall(function()
     if VirtualUser and VirtualUser.CaptureController then
@@ -48,17 +47,16 @@ local states = {
     InfJump = false, ESP = false, Xray = false, HitboxExpander = false,
     Fling = false, AntiVoid = false, PhaseGod = false, FlyNoFall = false,
     Spider = false, Allkill = false,
-    -- AntiCheat 계열은 항상 true로 고정 (UI에서 제거)
     Aimbot = false, SilentAim = false, WallCheck = false,
     AdvancedSilentAim = false, TriggerBot = false, Wallbang = false,
     Invisibility = false, Spinbot = false,
     AntiCT = false, Fullbright = false, FOV = false, AntiAFK = true,
     MaxZoom = true, GravityMod = false, KillAura = false,
     TeamCheck = true, Ganzi = false, Log = false, AutoDodge = false,
-    SkinChanger = false
+    SkinChanger = false,
+    BadKillAura = false,
+    BadFly = false
 }
-
--- 안티치트는 항상 활성화 (별도 상태 없음)
 
 local settingsConfig = {
     FlySpeed = 50, FlyNoFallSpeed = 16, AutoTeleportDistance = 50,
@@ -67,7 +65,11 @@ local settingsConfig = {
     GravityValue = 196.2, ThemeColor = Color3.fromRGB(180, 180, 180),
     KillAuraRange = 30, KillAuraDelay = 0.1, DodgeRange = 25,
     DodgeSpeed = 40, AIPredictionTime = 0.2,
-    AimFOV = 90, TriggerDelay = 0.1
+    AimFOV = 90, TriggerDelay = 0.1,
+    BadFlySpeed = 16,
+    BadKillRange = 30,
+    BadSwingDelay = 0.05,
+    BadCameraSmoothness = 0.3
 }
 
 -- [스킨 프리셋]
@@ -236,6 +238,46 @@ local function getClosestTarget()
     return target, closestDist
 end
 
+-- ======== RemoteEvent 찾기 ========
+local AttackRemote = nil
+local keywords = {"attack", "swing", "hit", "damage", "slash", "sword"}
+pcall(function()
+    for _, v in ipairs(game:GetDescendants()) do
+        if v:IsA("RemoteEvent") then
+            local name = v.Name:lower()
+            for _, kw in ipairs(keywords) do
+                if name:find(kw) then
+                    AttackRemote = v
+                    break
+                end
+            end
+            if AttackRemote then break end
+        end
+    end
+end)
+
+-- ======== 공격 함수 (강화) ========
+local function Attack(target)
+    if AttackRemote then
+        pcall(function() AttackRemote:FireServer(target) end)
+    end
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ButtonDown("Attack")
+        task.wait(0.01)
+        VirtualUser:ButtonUp("Attack")
+    end)
+    pcall(function()
+        mouse1click()
+        task.wait(0.01)
+        mouse1release()
+    end)
+    pcall(function()
+        UserInputService:SetMouseButtonEnabled(true)
+        UserInputService:SetMouseButtonEnabled(false)
+    end)
+end
+
 -- ======== UI 생성 ========
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CubicErrorFreeUI"
@@ -334,12 +376,91 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- [모바일 토글 버튼]
+-- [Uninject 버튼 (우측 상단, 크게)]
+local UninjectBtn = Instance.new("TextButton")
+UninjectBtn.Name = "UninjectBtn"
+UninjectBtn.Size = UDim2.new(0, 70 * uiScale, 0, 30 * uiScale)
+UninjectBtn.Position = UDim2.new(1, -75 * uiScale, 0, 5 * uiScale)
+UninjectBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+UninjectBtn.Text = "X"
+UninjectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+UninjectBtn.TextSize = 16 * uiScale
+UninjectBtn.Font = Enum.Font.GothamBold
+UninjectBtn.BorderSizePixel = 0
+UninjectBtn.ZIndex = 3
+UninjectBtn.Parent = MainFrame
+local UninjectCorner = Instance.new("UICorner")
+UninjectCorner.CornerRadius = UDim.new(0, 6)
+UninjectCorner.Parent = UninjectBtn
+
+UninjectBtn.MouseButton1Click:Connect(function()
+    local confirm = Instance.new("Frame")
+    confirm.Size = UDim2.new(0, 300, 0, 150)
+    confirm.Position = UDim2.new(0.5, -150, 0.5, -75)
+    confirm.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    confirm.BorderSizePixel = 0
+    confirm.Parent = ScreenGui
+    local confirmCorner = Instance.new("UICorner")
+    confirmCorner.CornerRadius = UDim.new(0, 12)
+    confirmCorner.Parent = confirm
+
+    local confirmLabel = Instance.new("TextLabel")
+    confirmLabel.Size = UDim2.new(1, 0, 0, 60)
+    confirmLabel.Position = UDim2.new(0, 0, 0, 10)
+    confirmLabel.BackgroundTransparency = 1
+    confirmLabel.Text = "Are you sure to uninject?"
+    confirmLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    confirmLabel.TextSize = 16
+    confirmLabel.Font = Enum.Font.GothamBold
+    confirmLabel.Parent = confirm
+
+    local yesBtn = Instance.new("TextButton")
+    yesBtn.Size = UDim2.new(0, 80, 0, 35)
+    yesBtn.Position = UDim2.new(0.2, -40, 0, 85)
+    yesBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    yesBtn.Text = "Yes"
+    yesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    yesBtn.TextSize = 16
+    yesBtn.Font = Enum.Font.GothamBold
+    yesBtn.Parent = confirm
+    local ycorner = Instance.new("UICorner")
+    ycorner.CornerRadius = UDim.new(0, 6)
+    ycorner.Parent = yesBtn
+    yesBtn.MouseButton1Click:Connect(function()
+        for k, v in pairs(states) do
+            if type(v) == "boolean" then
+                states[k] = false
+            end
+        end
+        saveState()
+        ScreenGui:Destroy()
+        if Lighting:FindFirstChild("BlurEffect") then Lighting.BlurEffect:Destroy() end
+        error("Uninjected by user")
+    end)
+
+    local noBtn = Instance.new("TextButton")
+    noBtn.Size = UDim2.new(0, 80, 0, 35)
+    noBtn.Position = UDim2.new(0.8, -80, 0, 85)
+    noBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    noBtn.Text = "No"
+    noBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    noBtn.TextSize = 16
+    noBtn.Font = Enum.Font.GothamBold
+    noBtn.Parent = confirm
+    local ncorner = Instance.new("UICorner")
+    ncorner.CornerRadius = UDim.new(0, 6)
+    ncorner.Parent = noBtn
+    noBtn.MouseButton1Click:Connect(function()
+        confirm:Destroy()
+    end)
+end)
+
+-- [모바일 햄버거 버튼 (중앙 상단)]
 if isMobile then
     local ToggleBtn = Instance.new("TextButton")
     ToggleBtn.Name = "MenuToggle"
     ToggleBtn.Size = UDim2.new(0, 55 * uiScale, 0, 55 * uiScale)
-    ToggleBtn.Position = UDim2.new(0, 12 * uiScale, 0, 12 * uiScale)
+    ToggleBtn.Position = UDim2.new(0.5, -27.5 * uiScale, 0, 10 * uiScale)
     ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
     ToggleBtn.BorderSizePixel = 0
     ToggleBtn.Text = "☰"
@@ -354,6 +475,8 @@ if isMobile then
         MainFrame.Visible = not MainFrame.Visible
     end)
 end
+
+-- RightShift 토글 (Uninject와 무관)
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.RightShift then
         MainFrame.Visible = not MainFrame.Visible
@@ -371,7 +494,7 @@ TitleCorner.CornerRadius = UDim.new(0, 12)
 TitleCorner.Parent = TitleBar
 
 local TitleText = Instance.new("TextLabel")
-TitleText.Size = UDim2.new(0, 240 * uiScale, 1, 0)
+TitleText.Size = UDim2.new(0.6, 0, 1, 0)
 TitleText.Position = UDim2.new(0, 15 * uiScale, 0, 0)
 TitleText.BackgroundTransparency = 1
 TitleText.Font = Enum.Font.GothamBold
@@ -383,11 +506,11 @@ TitleText.TextXAlignment = Enum.TextXAlignment.Left
 TitleText.Parent = TitleBar
 
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(0.4, 0, 0, 20 * uiScale)
-statusLabel.Position = UDim2.new(0.55, 0, 0, 15 * uiScale)
+statusLabel.Size = UDim2.new(0.3, 0, 1, 0)
+statusLabel.Position = UDim2.new(0.65, 0, 0, 0)
 statusLabel.BackgroundTransparency = 1
 statusLabel.Font = Enum.Font.Gotham
-statusLabel.Text = "Auto-save enabled"
+statusLabel.Text = "Auto-save"
 statusLabel.TextColor3 = Color3.fromRGB(150, 160, 170)
 statusLabel.TextSize = 10 * uiScale
 statusLabel.TextXAlignment = Enum.TextXAlignment.Right
@@ -438,6 +561,21 @@ local function createTab(name, layoutOrder)
     grid.CellPadding = UDim2.new(0, 12 * uiScale, 0, 12 * uiScale)
     grid.Parent = content
 
+    local function updateCanvas()
+        local children = content:GetChildren()
+        local count = 0
+        for _, child in ipairs(children) do
+            if child:IsA("Frame") and child.Name ~= "UIGridLayout" then
+                count = count + 1
+            end
+        end
+        local rows = math.ceil(count / 2)
+        local height = rows * (75 * uiScale + 12 * uiScale) + 20 * uiScale
+        content.CanvasSize = UDim2.new(0, 0, 0, height)
+    end
+    content.ChildAdded:Connect(updateCanvas)
+    content.ChildRemoved:Connect(updateCanvas)
+
     tabContents[name] = content
 
     btn.MouseButton1Click:Connect(function()
@@ -455,6 +593,7 @@ local function createTab(name, layoutOrder)
             BackgroundColor3 = Color3.fromRGB(180, 180, 180),
             TextColor3 = Color3.fromRGB(20, 20, 30)
         }):Play()
+        updateCanvas()
     end)
     return content
 end
@@ -462,10 +601,10 @@ end
 local mainTab = createTab("Main", 1)
 local combatTab = createTab("Combat", 2)
 local visualTab = createTab("Visual", 3)
--- AC 탭 제거 (안티치트는 항상 활성화)
 local utilTab = createTab("Util", 4)
 local settingsTab = createTab("Settings", 5)
 local skinTab = createTab("Skin", 6)
+local badWarsTab = createTab("BadWars", 7)
 
 -- [도우미 함수: 토글 생성]
 local function createToggle(parent, label, stateKey, defaultState)
@@ -615,7 +754,7 @@ end
 
 -- ======== 탭 내용 채우기 ========
 
--- [Main 탭] - ChatSpam 제거
+-- [Main 탭]
 createToggle(mainTab, "Fly", "Fly", false)
 createToggle(mainTab, "Auto-Teleport", "AutoTeleport", false)
 createToggle(mainTab, "Noclip", "Noclip", false)
@@ -647,7 +786,7 @@ createToggle(visualTab, "Xray", "Xray", false)
 createToggle(visualTab, "Fullbright", "Fullbright", false)
 createToggle(visualTab, "FOV Changer", "FOV", false)
 
--- [Util 탭] - AntiCheat 관련 토글 제거
+-- [Util 탭]
 createToggle(utilTab, "AntiCT", "AntiCT", false)
 createToggle(utilTab, "Anti-AFK", "AntiAFK", true)
 createToggle(utilTab, "Max Zoom", "MaxZoom", true)
@@ -681,6 +820,10 @@ if settingsContent then
     addSlider("AI Prediction Time", 0.05, 1, settingsConfig.AIPredictionTime, function(v) settingsConfig.AIPredictionTime = v end)
     addSlider("Aim FOV", 1, 180, settingsConfig.AimFOV, function(v) settingsConfig.AimFOV = v end)
     addSlider("Trigger Delay", 0.05, 0.5, settingsConfig.TriggerDelay, function(v) settingsConfig.TriggerDelay = v end)
+    addSlider("Bad Fly Speed", 1, 100, settingsConfig.BadFlySpeed, function(v) settingsConfig.BadFlySpeed = v end)
+    addSlider("Bad Kill Range", 10, 50, settingsConfig.BadKillRange, function(v) settingsConfig.BadKillRange = v end)
+    addSlider("Bad Swing Delay", 0.02, 0.15, settingsConfig.BadSwingDelay, function(v) settingsConfig.BadSwingDelay = v end)
+    addSlider("Camera Smoothness", 0.05, 0.5, settingsConfig.BadCameraSmoothness, function(v) settingsConfig.BadCameraSmoothness = v end)
 end
 
 -- [Skin 탭]
@@ -763,6 +906,10 @@ if skinContent then
         createSkinButton(skinName)
     end
 end
+
+-- [BadWars 탭]
+createToggle(badWarsTab, "Bad Kill Aura", "BadKillAura", false)
+createToggle(badWarsTab, "Bad Fly (Q toggle)", "BadFly", false)
 
 -- ======== GANZI ========
 local ganziObjects = {}
@@ -1011,9 +1158,7 @@ for _, p in ipairs(Players:GetPlayers()) do
     end
 end
 
--- ======== 엔진 로직 ========
-
--- [안티치트 우회 - 항상 활성화]
+-- ======== 안티치트 우회 (항상 활성화) ========
 local function disableACScripts(char)
     if not char then return end
     task.wait(0.5)
@@ -1045,11 +1190,9 @@ local function disableACScripts(char)
     end)
 end
 
--- CharacterAdded 시 안티치트 우회 적용
 LocalPlayer.CharacterAdded:Connect(disableACScripts)
 if LocalPlayer.Character then disableACScripts(LocalPlayer.Character) end
 
--- 주기적인 안티치트 유지 (서버에서 다시 활성화할 수 있으므로)
 local acTimer = 0
 RunService.Heartbeat:Connect(function(dt)
     acTimer = acTimer + dt
@@ -1063,7 +1206,6 @@ RunService.Heartbeat:Connect(function(dt)
             end
         end
     end
-    -- FPS AntiCheat: 스프레드/반동 무시 (항상 적용)
     pcall(function()
         local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
         if tool then
@@ -1074,7 +1216,6 @@ RunService.Heartbeat:Connect(function(dt)
             end
         end
     end)
-    -- Tower AntiCheat: 특정 오브젝트 제거 (항상 적용)
     pcall(function()
         for _, v in ipairs(Workspace:GetDescendants()) do
             if v:IsA("Script") and (v.Name:lower():find("anticheat") or v.Name:lower():find("ac")) then
@@ -1084,7 +1225,9 @@ RunService.Heartbeat:Connect(function(dt)
     end)
 end)
 
--- [Fly / FlyNoFall 물리 수정]
+-- ======== 기존 기능들 (전체 포함) ========
+
+-- [Fly / FlyNoFall] (일반 Fly - 기존 유지)
 local function fixFlyPhysics()
     local char = LocalPlayer.Character
     if not char then return end
@@ -1210,7 +1353,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 if LocalPlayer.Character then setupPhaseGod() end
 
--- [기타 기능들]
+-- [AutoTeleport]
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -1237,6 +1380,7 @@ task.spawn(function()
     end
 end)
 
+-- [Noclip]
 RunService.Stepped:Connect(function()
     if states.Noclip then
         local char = LocalPlayer.Character
@@ -1248,6 +1392,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
+-- [Speed + Gravity] (속도는 Speed 토글에만 의존, 킬아우라와 무관)
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
@@ -1262,6 +1407,7 @@ RunService.RenderStepped:Connect(function()
     Workspace.Gravity = states.GravityMod and 50 or settingsConfig.GravityValue
 end)
 
+-- [InfJump]
 UserInputService.JumpRequest:Connect(function()
     if states.InfJump then
         local char = LocalPlayer.Character
@@ -1271,6 +1417,7 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
+-- [Fling]
 RunService.Heartbeat:Connect(function()
     if states.Fling then
         local char = LocalPlayer.Character
@@ -1288,6 +1435,7 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
+-- [AntiVoid]
 RunService.RenderStepped:Connect(function()
     if states.AntiVoid then
         local char = LocalPlayer.Character
@@ -1300,6 +1448,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- [Allkill]
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -1313,6 +1462,7 @@ task.spawn(function()
     end
 end)
 
+-- [Hitbox Expander]
 RunService.RenderStepped:Connect(function()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -1329,7 +1479,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- 기존 Silent Aim (클릭 시 보정)
+-- [Silent Aim (기존)]
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if states.SilentAim and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
@@ -1343,7 +1493,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- 고급 Silent Aim
+-- [고급 Silent Aim]
 local triggerCooldown = 0
 RunService.RenderStepped:Connect(function(dt)
     if not states.AdvancedSilentAim then return end
@@ -1384,7 +1534,7 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- Aimbot
+-- [Aimbot]
 RunService.RenderStepped:Connect(function()
     if states.Aimbot and not states.AdvancedSilentAim then
         local target, _ = getClosestTarget()
@@ -1394,7 +1544,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Kill Aura
+-- [Kill Aura (기존) - 속도 간섭 없음]
 task.spawn(function()
     while true do
         task.wait(settingsConfig.KillAuraDelay)
@@ -1408,7 +1558,7 @@ task.spawn(function()
     end
 end)
 
--- Auto Dodge
+-- [Auto Dodge]
 local dodgeCooldown = 0
 RunService.Heartbeat:Connect(function(dt)
     if not states.AutoDodge then return end
@@ -1432,7 +1582,7 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- Spinbot
+-- [Spinbot]
 RunService.RenderStepped:Connect(function(dt)
     if states.Spinbot then
         local char = LocalPlayer.Character
@@ -1445,7 +1595,7 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- Invisibility
+-- [Invisibility]
 local function updateInvisibility()
     local char = LocalPlayer.Character
     if not char then return end
@@ -1502,7 +1652,7 @@ task.spawn(function()
     end
 end)
 
--- AntiCT
+-- [AntiCT]
 RunService.Stepped:Connect(function()
     if states.AntiCT then
         local char = LocalPlayer.Character
@@ -1516,7 +1666,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- AntiAFK
+-- [AntiAFK]
 LocalPlayer.Idled:Connect(function()
     if states.AntiAFK then
         pcall(function()
@@ -1527,7 +1677,7 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
--- Zoom, Fullbright, FOV
+-- [Zoom, Fullbright, FOV]
 RunService.RenderStepped:Connect(function()
     if states.MaxZoom then
         LocalPlayer.CameraMaxZoomDistance = 999999
@@ -1541,7 +1691,7 @@ RunService.RenderStepped:Connect(function()
     Camera.FieldOfView = states.FOV and settingsConfig.FOVValue or 70
 end)
 
--- Xray
+-- [Xray]
 local xrayCache = {}
 RunService.RenderStepped:Connect(function()
     if states.Xray then
@@ -1570,7 +1720,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ESP
+-- [ESP]
 local espCache = {}
 local function setupESP(p)
     if p == LocalPlayer then return end
@@ -1718,8 +1868,149 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- ======== BADWARS 전용 기능 (완전 재구현 - 속도 비간섭 + 몸 회전 + 플라이) ========
+
+-- Bad Kill Aura (오직 몸만 회전, 카메라 고정, 속도 전혀 간섭 없음)
+local badKillCooldown = 0
+
+RunService.RenderStepped:Connect(function(dt)
+    pcall(function()
+        if not states.BadKillAura then
+            return
+        end
+
+        badKillCooldown = badKillCooldown - dt
+        if badKillCooldown > 0 then return end
+
+        local char = LocalPlayer.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        -- 타겟 탐색 (가장 가까운 적)
+        local target = nil
+        local closestDist = settingsConfig.BadKillRange
+        local targetChar = nil
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and (not states.TeamCheck or plr.Team ~= LocalPlayer.Team) then
+                local eChar = plr.Character
+                if eChar and eChar:FindFirstChild("HumanoidRootPart") and eChar:FindFirstChild("Humanoid") then
+                    local eRoot = eChar.HumanoidRootPart
+                    local dist = (root.Position - eRoot.Position).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        target = eRoot
+                        targetChar = eChar
+                    end
+                end
+            end
+        end
+
+        if target and targetChar then
+            -- 1. 몸(Body)만 즉시 회전 (카메라는 전혀 건드리지 않음)
+            root.CFrame = CFrame.new(root.Position, target.Position)
+
+            -- 2. 공격 실행 (속도는 전혀 변경하지 않음)
+            Attack(targetChar)
+
+            -- 3. 넉백 방지 (속도는 건드리지 않고, 위치만 유지)
+            -- root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)  -- 주석 처리: 속도 간섭 안 함
+
+            badKillCooldown = settingsConfig.BadSwingDelay
+        end
+    end)
+end)
+
+-- Bad Fly (완전 재구현 - Q 토글, Space 상승, Ctrl 하강, WASD 이동)
+local badFlyActive = false
+local badFlyY = nil
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Q and states.BadFly then
+        badFlyActive = not badFlyActive
+        if badFlyActive then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                badFlyY = char.HumanoidRootPart.Position.Y
+            end
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    char.Humanoid.PlatformStand = true
+                end
+            end)
+        else
+            badFlyY = nil
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    char.Humanoid.PlatformStand = false
+                end
+            end)
+        end
+        updateToggleUI("BadFly")
+        saveState()
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    pcall(function()
+        if not states.BadFly or not badFlyActive then return end
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then return end
+        local root = char.HumanoidRootPart
+        local hum = char.Humanoid
+
+        hum.PlatformStand = true
+
+        local camCF = Camera.CFrame
+        local forward = camCF.LookVector * Vector3.new(1, 0, 1)
+        local right = camCF.RightVector * Vector3.new(1, 0, 1)
+        if forward.Magnitude > 0 then forward = forward.Unit end
+        if right.Magnitude > 0 then right = right.Unit end
+
+        local moveDir = Vector3.new()
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + forward end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - forward end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - right end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + right end
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            badFlyY = (badFlyY or root.Position.Y) + 1
+        elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            badFlyY = (badFlyY or root.Position.Y) - 1
+        end
+
+        if badFlyY == nil then
+            badFlyY = root.Position.Y
+        end
+
+        local speed = settingsConfig.BadFlySpeed or 16
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit * speed
+        end
+
+        root.AssemblyLinearVelocity = Vector3.new(moveDir.X, 0, moveDir.Z)
+        local currentPos = root.Position
+        root.CFrame = CFrame.new(Vector3.new(currentPos.X, badFlyY, currentPos.Z))
+    end)
+end)
+
 -- ======== 저장된 상태 복원 ========
 loadState()
 updateAllToggles()
 if states.SkinChanger then applySkin(currentSkin) else resetSkin() end
 if states.Invisibility then updateInvisibility() end
+if states.BadFly then
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        badFlyY = char.HumanoidRootPart.Position.Y
+        badFlyActive = true
+        pcall(function()
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid.PlatformStand = true
+            end
+        end)
+    end
+end
