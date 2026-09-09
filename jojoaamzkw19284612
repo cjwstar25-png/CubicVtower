@@ -1,6 +1,6 @@
+-- [최종 확정] 모든 기능 + 안티치트/벤/킥 우회 최대 강화 (구문 오류 제거 완료)
 print("Cubic Updating. 큐빅 스크립트가 업데이트 중입니다.")
 
--- [최종 확정] 모든 기능 + 디버그 출력 제거 + 안티치트/벤/킥 우회 최대 강화 (구문 오류 수정 완료)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -21,26 +21,23 @@ pcall(function()
     end
 end)
 
--- ====== 안티치트/벤/킥 우회 ======
-local function antiBan()
-    local oldKick = LocalPlayer.Kick
+-- ====== 안티치트/벤/킥 우회 (직접 실행, 함수 제거) ======
+pcall(function()
     LocalPlayer.Kick = function() end
     LocalPlayer.Ban = function() end
     LocalPlayer:SetAttribute("Banned", false)
     local ts = game:GetService("TeleportService")
-    local oldTeleport = ts.Teleport
     ts.Teleport = function() end
     ts.TeleportToPlaceInstance = function() end
     ts.TeleportAsync = function() end
-end
-antiBan()
+end)
 
 task.spawn(function()
     while true do
         task.wait(5)
         pcall(function()
             if LocalPlayer then
-                LocalPlayer:Kick = function() end
+                LocalPlayer.Kick = function() end
                 LocalPlayer.Ban = function() end
                 LocalPlayer:SetAttribute("Banned", false)
             end
@@ -48,7 +45,7 @@ task.spawn(function()
     end
 end)
 
--- ====== RemoteEvent 스마트 탐색 (continue 제거) ======
+-- ====== RemoteEvent 스마트 탐색 ======
 local AttackRemote = nil
 local allEvents = {}
 local blacklist = {
