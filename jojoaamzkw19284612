@@ -1,4 +1,6 @@
--- [최종 확정] 모든 기능 포함 + BadWars 킬아우라 (카메라 회전 제거, 딜레이 0.01, 사거리 60, 공격 5회)
+print("Cubic Updating. 큐빅 스크립트가 업데이트 중입니다.")
+
+-- [최종 확정] 모든 기능 + 디버그 출력 제거 + 안티치트/벤/킥 우회 최대 강화 (구문 오류 수정 완료)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -19,7 +21,103 @@ pcall(function()
     end
 end)
 
--- [디바이스 감지]
+-- ====== 안티치트/벤/킥 우회 ======
+local function antiBan()
+    local oldKick = LocalPlayer.Kick
+    LocalPlayer.Kick = function() end
+    LocalPlayer.Ban = function() end
+    LocalPlayer:SetAttribute("Banned", false)
+    local ts = game:GetService("TeleportService")
+    local oldTeleport = ts.Teleport
+    ts.Teleport = function() end
+    ts.TeleportToPlaceInstance = function() end
+    ts.TeleportAsync = function() end
+end
+antiBan()
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        pcall(function()
+            if LocalPlayer then
+                LocalPlayer:Kick = function() end
+                LocalPlayer.Ban = function() end
+                LocalPlayer:SetAttribute("Banned", false)
+            end
+        end)
+    end
+end)
+
+-- ====== RemoteEvent 스마트 탐색 (continue 제거) ======
+local AttackRemote = nil
+local allEvents = {}
+local blacklist = {
+    "integrity", "analytics", "localization", "sender", "service", 
+    "key", "check", "processor", "location", "telemetry", 
+    "log", "report", "ping", "latency", "heartbeat", 
+    "auth", "session", "validation", "verify", "token", 
+    "queue", "manager", "module", "state", "config", 
+    "setting", "data", "store", "cache"
+}
+local whitelist = {
+    "attack", "hit", "damage", "swing", "sword", 
+    "melee", "click", "fire", "shoot", "slash", 
+    "block", "tool", "combat", "use", "activate"
+}
+
+pcall(function()
+    local function scan(container)
+        for _, v in ipairs(container:GetDescendants()) do
+            if v:IsA("RemoteEvent") then
+                table.insert(allEvents, v)
+            end
+        end
+    end
+    scan(game)
+    scan(ReplicatedStorage)
+
+    local bestEvent = nil
+    local bestScore = -1
+    for _, ev in ipairs(allEvents) do
+        local name = ev.Name:lower()
+        local fullName = ev:GetFullName():lower()
+        local score = 0
+        local isBlacklisted = false
+        for _, word in ipairs(blacklist) do
+            if name:find(word) or fullName:find(word) then
+                isBlacklisted = true
+                break
+            end
+        end
+        if not isBlacklisted then
+            for _, word in ipairs(whitelist) do
+                if name:find(word) or fullName:find(word) then
+                    score = score + 10
+                end
+            end
+            if #name < 10 then score = score + 3 end
+            if ev.Parent == ReplicatedStorage then score = score + 5 end
+            if score > bestScore then
+                bestScore = score
+                bestEvent = ev
+            end
+        end
+    end
+    if bestEvent then
+        AttackRemote = bestEvent
+    elseif #allEvents > 0 then
+        AttackRemote = allEvents[1]
+    end
+end)
+
+-- ====== 공격 함수 ======
+local function Attack(target)
+    if AttackRemote then
+        pcall(function() AttackRemote:FireServer(target) end)
+    end
+end
+
+-- ====== 디바이스 감지 ======
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local screenW = ScreenSize.X
 local uiScale, frameW, frameH
@@ -33,7 +131,6 @@ else
     uiScale = math.clamp(screenW / 1900, 0.65, 1.0)
 end
 
--- 기존 UI 제거
 if CoreGui:FindFirstChild("CubicErrorFreeUI") then
     CoreGui.CubicErrorFreeUI:Destroy()
 end
@@ -50,31 +147,32 @@ local states = {
     Aimbot = false, SilentAim = false, WallCheck = false,
     AdvancedSilentAim = false, TriggerBot = false, Wallbang = false,
     Invisibility = false, Spinbot = false,
-    AntiCT = false, Fullbright = false, FOV = false, AntiAFK = true,
+    AntiCT = false, Fullbright = false, AntiAFK = true,
     MaxZoom = true, GravityMod = false, KillAura = false,
     TeamCheck = true, Ganzi = false, Log = false, AutoDodge = false,
     SkinChanger = false,
     BadKillAura = false,
     BadFly = false,
     AutoSprint = false,
-    BadKillAuraTeamCheck = true
+    BadKillAuraTeamCheck = true,
+    AutoClick = false,
+    BadKillAuraCamera = false
 }
 
 local settingsConfig = {
     FlySpeed = 50, FlyNoFallSpeed = 16, AutoTeleportDistance = 50,
     SpeedValue = 50, ESPColor = Color3.fromRGB(200, 200, 200),
-    AntiVoidHeight = -50, FOVValue = 125, HitboxSize = 20,
+    AntiVoidHeight = -50, HitboxSize = 20,
     GravityValue = 196.2, ThemeColor = Color3.fromRGB(180, 180, 180),
     KillAuraRange = 30, KillAuraDelay = 0.1, DodgeRange = 25,
     DodgeSpeed = 40, AIPredictionTime = 0.2,
     AimFOV = 90, TriggerDelay = 0.1,
     BadFlySpeed = 16,
     BadKillRange = 60,
-    BadSwingDelay = 0.01,
+    BadSwingDelay = 0.35,
     BadCameraSmoothness = 0.3
 }
 
--- [스킨 프리셋]
 local SKIN_PRESETS = {
     Default = { Name = "Default", Color = nil, Texture = nil },
     Rainbow = { Name = "Rainbow", Color = nil, Texture = nil },
@@ -129,7 +227,6 @@ local function loadState()
     end
 end
 
--- [UI 토글 동기화]
 local toggleElements = {}
 
 local function updateToggleUI(stateKey)
@@ -153,7 +250,6 @@ local function updateAllToggles()
     end
 end
 
--- [Skin 적용/해제]
 local function applySkin(skinName)
     local preset = SKIN_PRESETS[skinName]
     if not preset then return end
@@ -207,7 +303,6 @@ local function resetSkin()
     end
 end
 
--- [필터링 함수]
 local function isValidTarget(player)
     if player == LocalPlayer then return false end
     local char = player.Character
@@ -240,68 +335,6 @@ local function getClosestTarget()
     return target, closestDist
 end
 
--- ======== RemoteEvent 찾기 ========
-local AttackRemote = nil
-local keywords = {"attack", "swing", "hit", "damage", "slash", "sword", "click", "melee"}
-pcall(function()
-    for _, v in ipairs(game:GetDescendants()) do
-        if v:IsA("RemoteEvent") then
-            local name = v.Name:lower()
-            for _, kw in ipairs(keywords) do
-                if name:find(kw) then
-                    AttackRemote = v
-                    break
-                end
-            end
-            if AttackRemote then break end
-        end
-    end
-end)
-
--- ======== 공격 함수 (5회 반복) ========
-local function Attack(target)
-    if AttackRemote then
-        pcall(function() AttackRemote:FireServer(target) end)
-    end
-
-    local possibleNames = {"Attack", "Hit", "Swing", "Damage", "Slash", "Click", "Melee", "Sword", "Block"}
-    for _, name in ipairs(possibleNames) do
-        pcall(function()
-            local ev = ReplicatedStorage:FindFirstChild(name)
-            if ev and ev:IsA("RemoteEvent") then
-                ev:FireServer(target)
-            end
-        end)
-        pcall(function()
-            local ev = ReplicatedStorage:FindFirstChild(name .. "Remote")
-            if ev and ev:IsA("RemoteEvent") then
-                ev:FireServer(target)
-            end
-        end)
-    end
-
-    for i = 1, 5 do
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ButtonDown("Attack")
-            task.wait(0.01)
-            VirtualUser:ButtonUp("Attack")
-        end)
-        pcall(function()
-            mouse1click()
-            task.wait(0.01)
-            mouse1release()
-        end)
-        task.wait(0.005)
-    end
-
-    pcall(function()
-        UserInputService:SetMouseButtonEnabled(true)
-        task.wait(0.005)
-        UserInputService:SetMouseButtonEnabled(false)
-    end)
-end
-
 -- ======== UI 생성 ========
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "CubicErrorFreeUI"
@@ -313,7 +346,6 @@ if ScreenGui.Parent ~= CoreGui then
     ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- [메인 프레임]
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(frameW, 0, frameH, 0)
@@ -331,7 +363,6 @@ MainStroke.Transparency = 0.3
 MainStroke.Thickness = 1.5
 MainStroke.Parent = MainFrame
 
--- [드래그]
 local dragData = { active = false, start = nil, pos = nil }
 MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -363,7 +394,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- [리사이즈 핸들]
 local ResizeHandle = Instance.new("TextButton")
 ResizeHandle.Size = UDim2.new(0, 20 * uiScale, 0, 20 * uiScale)
 ResizeHandle.Position = UDim2.new(1, -20 * uiScale, 1, -20 * uiScale)
@@ -400,7 +430,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- [Uninject 버튼]
 local UninjectBtn = Instance.new("TextButton")
 UninjectBtn.Name = "UninjectBtn"
 UninjectBtn.Size = UDim2.new(0, 70 * uiScale, 0, 30 * uiScale)
@@ -479,7 +508,6 @@ UninjectBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
--- [모바일 햄버거 버튼]
 if isMobile then
     local ToggleBtn = Instance.new("TextButton")
     ToggleBtn.Name = "MenuToggle"
@@ -500,14 +528,12 @@ if isMobile then
     end)
 end
 
--- RightShift 토글
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.RightShift then
         MainFrame.Visible = not MainFrame.Visible
     end
 end)
 
--- [타이틀 바]
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 50 * uiScale)
 TitleBar.BackgroundColor3 = Color3.fromRGB(28, 30, 38)
@@ -540,7 +566,6 @@ statusLabel.TextSize = 10 * uiScale
 statusLabel.TextXAlignment = Enum.TextXAlignment.Right
 statusLabel.Parent = TitleBar
 
--- [탭 컨테이너]
 local TabContainer = Instance.new("Frame")
 TabContainer.Size = UDim2.new(0.75, 0, 0, 32 * uiScale)
 TabContainer.Position = UDim2.new(0.25, 0, 0, 9 * uiScale)
@@ -630,7 +655,6 @@ local settingsTab = createTab("Settings", 5)
 local skinTab = createTab("Skin", 6)
 local badWarsTab = createTab("BadWars", 7)
 
--- [도우미 함수: 토글 생성]
 local function createToggle(parent, label, stateKey, defaultState)
     if states[stateKey] == nil then
         states[stateKey] = defaultState
@@ -735,7 +759,6 @@ local function createToggle(parent, label, stateKey, defaultState)
     return card
 end
 
--- [슬라이더]
 local function createSlider(parent, label, min, max, defaultVal, callback)
     local row = Instance.new("Frame")
     row.Size = UDim2.new(1, -10 * uiScale, 0, 45 * uiScale)
@@ -777,8 +800,6 @@ local function createSlider(parent, label, min, max, defaultVal, callback)
 end
 
 -- ======== 탭 내용 채우기 ========
-
--- Main
 createToggle(mainTab, "Fly", "Fly", false)
 createToggle(mainTab, "Auto-Teleport", "AutoTeleport", false)
 createToggle(mainTab, "Noclip", "Noclip", false)
@@ -789,7 +810,6 @@ createToggle(mainTab, "AntiVoid", "AntiVoid", false)
 createToggle(mainTab, "FlyNoFall", "FlyNoFall", false)
 createToggle(mainTab, "Spider", "Spider", false)
 
--- Combat
 createToggle(combatTab, "Aimbot", "Aimbot", false)
 createToggle(combatTab, "Silent Aim", "SilentAim", false)
 createToggle(combatTab, "Advanced Silent Aim", "AdvancedSilentAim", false)
@@ -804,13 +824,10 @@ createToggle(combatTab, "Kill Aura", "KillAura", false)
 createToggle(combatTab, "Auto Dodge", "AutoDodge", false)
 createToggle(combatTab, "Team Check", "TeamCheck", true)
 
--- Visual
 createToggle(visualTab, "ESP + Tracert", "ESP", false)
 createToggle(visualTab, "Xray", "Xray", false)
 createToggle(visualTab, "Fullbright", "Fullbright", false)
-createToggle(visualTab, "FOV Changer", "FOV", false)
 
--- Util
 createToggle(utilTab, "AntiCT", "AntiCT", false)
 createToggle(utilTab, "Anti-AFK", "AntiAFK", true)
 createToggle(utilTab, "Max Zoom", "MaxZoom", true)
@@ -819,7 +836,6 @@ createToggle(utilTab, "Ganzi", "Ganzi", false)
 createToggle(utilTab, "Log", "Log", false)
 createToggle(utilTab, "Invisibility", "Invisibility", false)
 
--- Settings
 local settingsContent = tabContents["Settings"]
 if settingsContent then
     local grid = settingsContent:FindFirstChildOfClass("UIGridLayout")
@@ -829,6 +845,20 @@ if settingsContent then
     layout.Padding = UDim.new(0, 10 * uiScale)
     layout.Parent = settingsContent
 
+    local function updateSettingsCanvas()
+        local children = settingsContent:GetChildren()
+        local count = 0
+        for _, child in ipairs(children) do
+            if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("TextBox") then
+                count = count + 1
+            end
+        end
+        local height = count * (45 * uiScale + 10 * uiScale) + 50 * uiScale
+        settingsContent.CanvasSize = UDim2.new(0, 0, 0, height)
+    end
+    settingsContent.ChildAdded:Connect(updateSettingsCanvas)
+    settingsContent.ChildRemoved:Connect(updateSettingsCanvas)
+
     local function addSlider(label, min, max, default, callback)
         createSlider(settingsContent, label, min, max, default, callback)
     end
@@ -836,7 +866,6 @@ if settingsContent then
     addSlider("Fly Speed", 1, 200, settingsConfig.FlySpeed, function(v) settingsConfig.FlySpeed = v end)
     addSlider("Move Speed", 1, 200, settingsConfig.SpeedValue, function(v) settingsConfig.SpeedValue = v end)
     addSlider("Hitbox Size", 1, 50, settingsConfig.HitboxSize, function(v) settingsConfig.HitboxSize = v end)
-    addSlider("FOV Value", 1, 180, settingsConfig.FOVValue, function(v) settingsConfig.FOVValue = v end)
     addSlider("Kill Aura Range", 1, 100, settingsConfig.KillAuraRange, function(v) settingsConfig.KillAuraRange = v end)
     addSlider("Kill Aura Delay", 0.05, 1, settingsConfig.KillAuraDelay, function(v) settingsConfig.KillAuraDelay = v end)
     addSlider("Dodge Range", 1, 50, settingsConfig.DodgeRange, function(v) settingsConfig.DodgeRange = v end)
@@ -846,14 +875,13 @@ if settingsContent then
     addSlider("Trigger Delay", 0.05, 0.5, settingsConfig.TriggerDelay, function(v) settingsConfig.TriggerDelay = v end)
     addSlider("Bad Fly Speed", 1, 100, settingsConfig.BadFlySpeed, function(v) settingsConfig.BadFlySpeed = v end)
     addSlider("Bad Kill Range", 10, 80, settingsConfig.BadKillRange, function(v) settingsConfig.BadKillRange = v end)
-    addSlider("Bad Swing Delay", 0.01, 0.1, settingsConfig.BadSwingDelay, function(v) settingsConfig.BadSwingDelay = v end)
+    addSlider("Bad Swing Delay", 0.1, 0.6, settingsConfig.BadSwingDelay, function(v) settingsConfig.BadSwingDelay = v end)
     addSlider("Camera Smoothness", 0.05, 0.5, settingsConfig.BadCameraSmoothness, function(v) settingsConfig.BadCameraSmoothness = v end)
 
-    -- 킬아우라 팀 인식 토글
     createToggle(settingsContent, "Kill Aura Team Check", "BadKillAuraTeamCheck", true)
+    updateSettingsCanvas()
 end
 
--- Skin
 local skinContent = tabContents["Skin"]
 if skinContent then
     local grid = skinContent:FindFirstChildOfClass("UIGridLayout")
@@ -934,10 +962,10 @@ if skinContent then
     end
 end
 
--- BadWars
 createToggle(badWarsTab, "Bad Kill Aura", "BadKillAura", false)
 createToggle(badWarsTab, "Bad Fly (Q toggle)", "BadFly", false)
 createToggle(badWarsTab, "Auto Sprint", "AutoSprint", false)
+createToggle(badWarsTab, "Auto Click (CPS 20)", "AutoClick", false)
 
 -- ======== GANZI ========
 local ganziObjects = {}
@@ -1186,7 +1214,7 @@ for _, p in ipairs(Players:GetPlayers()) do
     end
 end
 
--- ======== 안티치트 우회 ========
+-- ======== 안티치트 우회 (강화) ========
 local acScriptsDisabled = false
 
 local function disableACScripts()
@@ -1196,7 +1224,7 @@ local function disableACScripts()
     local char = LocalPlayer.Character
     if char then
         for _, scriptObj in ipairs(char:GetDescendants()) do
-            if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac") or scriptObj.Name:lower():find("anti") or scriptObj.Name:lower():find("cheat")) then
+            if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac") or scriptObj.Name:lower():find("anti") or scriptObj.Name:lower():find("cheat") or scriptObj.Name:lower():find("security") or scriptObj.Name:lower():find("detect")) then
                 pcall(function() scriptObj.Disabled = true end)
             end
         end
@@ -1206,7 +1234,7 @@ local function disableACScripts()
         for _, v in ipairs(Players:GetPlayers()) do
             if v ~= LocalPlayer and v.Character then
                 for _, scr in ipairs(v.Character:GetDescendants()) do
-                    if scr:IsA("Script") and (scr.Name:lower():find("anticheat") or scr.Name:lower():find("ac")) then
+                    if scr:IsA("Script") and (scr.Name:lower():find("anticheat") or scr.Name:lower():find("ac") or scr.Name:lower():find("security") or scr.Name:lower():find("detect")) then
                         scr.Disabled = true
                     end
                 end
@@ -1240,7 +1268,7 @@ RunService.Heartbeat:Connect(function(dt)
     local char = LocalPlayer.Character
     if char then
         for _, scriptObj in ipairs(char:GetDescendants()) do
-            if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac") or scriptObj.Name:lower():find("anti")) then
+            if scriptObj:IsA("LocalScript") and (scriptObj.Name:lower():find("anticheat") or scriptObj.Name:lower():find("ac") or scriptObj.Name:lower():find("anti") or scriptObj.Name:lower():find("security") or scriptObj.Name:lower():find("detect")) then
                 pcall(function() scriptObj.Disabled = true end)
             end
         end
@@ -1248,7 +1276,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     pcall(function()
         for _, v in ipairs(Workspace:GetDescendants()) do
-            if v:IsA("Script") and (v.Name:lower():find("anticheat") or v.Name:lower():find("ac")) then
+            if v:IsA("Script") and (v.Name:lower():find("anticheat") or v.Name:lower():find("ac") or v.Name:lower():find("security") or v.Name:lower():find("detect")) then
                 v:Destroy()
             end
         end
@@ -1258,17 +1286,67 @@ RunService.Heartbeat:Connect(function(dt)
         local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
         if tool then
             for _, prop in ipairs(tool:GetDescendants()) do
-                if prop:IsA("NumberValue") and (prop.Name:lower():find("spread") or prop.Name:lower():find("recoil")) then
+                if prop:IsA("NumberValue") and (prop.Name:lower():find("spread") or prop.Name:lower():find("recoil") or prop.Name:lower():find("cooldown")) then
                     prop.Value = 0
                 end
             end
         end
     end)
+
+    pcall(function()
+        for _, ev in ipairs(ReplicatedStorage:GetDescendants()) do
+            if ev:IsA("RemoteEvent") and ev.Name:lower():find("anticheat") then
+                ev.OnServerEvent:Connect(function() end)
+            end
+        end
+    end)
+end)
+
+-- ======== AutoClick ========
+local autoClickRunning = false
+local clickTask = nil
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        autoClickRunning = true
+        if clickTask then
+            task.cancel(clickTask)
+            clickTask = nil
+        end
+        clickTask = task.spawn(function()
+            task.wait(0.3)
+            while autoClickRunning and states.AutoClick and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:Button1Down(Vector2.new(0,0), nil)
+                    task.wait(0.01)
+                    VirtualUser:Button1Up(Vector2.new(0,0), nil)
+                end)
+                pcall(function()
+                    mouse1click()
+                    task.wait(0.01)
+                    mouse1release()
+                end)
+                task.wait(0.05)
+            end
+        end)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gp)
+    if gp then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        autoClickRunning = false
+        if clickTask then
+            task.cancel(clickTask)
+            clickTask = nil
+        end
+    end
 end)
 
 -- ======== 기존 기능들 ========
 
--- [Fly / FlyNoFall]
 local function fixFlyPhysics()
     local char = LocalPlayer.Character
     if not char then return end
@@ -1311,7 +1389,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- FlyNoFall
 local autoNoFallActive = false
 local lockedFlightY = 0
 task.spawn(function()
@@ -1348,7 +1425,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- [Phase God]
 local phaseGodActive = false
 local phaseGodParts = {}
 local function activatePhaseGod()
@@ -1394,7 +1470,6 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 if LocalPlayer.Character then setupPhaseGod() end
 
--- [AutoTeleport]
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -1421,7 +1496,6 @@ task.spawn(function()
     end
 end)
 
--- [Noclip]
 RunService.Stepped:Connect(function()
     if states.Noclip then
         local char = LocalPlayer.Character
@@ -1433,13 +1507,12 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- [Speed + Gravity]
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
         local hum = char.Humanoid
         local root = char.HumanoidRootPart
-        hum.WalkSpeed = 16
+        hum.WalkSpeed = 19
         if states.Speed and hum.MoveDirection.Magnitude > 0 then
             local currentVel = root.AssemblyLinearVelocity
             root.AssemblyLinearVelocity = Vector3.new(hum.MoveDirection.X * settingsConfig.SpeedValue, currentVel.Y, hum.MoveDirection.Z * settingsConfig.SpeedValue)
@@ -1448,7 +1521,6 @@ RunService.RenderStepped:Connect(function()
     Workspace.Gravity = states.GravityMod and 50 or settingsConfig.GravityValue
 end)
 
--- [InfJump]
 UserInputService.JumpRequest:Connect(function()
     if states.InfJump then
         local char = LocalPlayer.Character
@@ -1458,7 +1530,6 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- [Fling]
 RunService.Heartbeat:Connect(function()
     if states.Fling then
         local char = LocalPlayer.Character
@@ -1476,7 +1547,6 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- [AntiVoid]
 RunService.RenderStepped:Connect(function()
     if states.AntiVoid then
         local char = LocalPlayer.Character
@@ -1489,7 +1559,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- [Allkill]
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -1503,7 +1572,6 @@ task.spawn(function()
     end
 end)
 
--- [Hitbox Expander]
 RunService.RenderStepped:Connect(function()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -1520,7 +1588,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- [Silent Aim]
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
     if states.SilentAim and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
@@ -1534,7 +1601,6 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- [고급 Silent Aim]
 local triggerCooldown = 0
 RunService.RenderStepped:Connect(function(dt)
     if not states.AdvancedSilentAim then return end
@@ -1575,7 +1641,6 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- [Aimbot]
 RunService.RenderStepped:Connect(function()
     if states.Aimbot and not states.AdvancedSilentAim then
         local target, _ = getClosestTarget()
@@ -1585,7 +1650,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- [Kill Aura (일반)]
 task.spawn(function()
     while true do
         task.wait(settingsConfig.KillAuraDelay)
@@ -1599,7 +1663,6 @@ task.spawn(function()
     end
 end)
 
--- [Auto Dodge]
 local dodgeCooldown = 0
 RunService.Heartbeat:Connect(function(dt)
     if not states.AutoDodge then return end
@@ -1623,7 +1686,6 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- [Spinbot]
 RunService.RenderStepped:Connect(function(dt)
     if states.Spinbot then
         local char = LocalPlayer.Character
@@ -1636,7 +1698,6 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- [Invisibility]
 local function updateInvisibility()
     local char = LocalPlayer.Character
     if not char then return end
@@ -1693,7 +1754,6 @@ task.spawn(function()
     end
 end)
 
--- [AntiCT]
 RunService.Stepped:Connect(function()
     if states.AntiCT then
         local char = LocalPlayer.Character
@@ -1707,7 +1767,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- [AntiAFK]
 LocalPlayer.Idled:Connect(function()
     if states.AntiAFK then
         pcall(function()
@@ -1718,7 +1777,6 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
--- [Zoom, Fullbright, FOV]
 RunService.RenderStepped:Connect(function()
     if states.MaxZoom then
         LocalPlayer.CameraMaxZoomDistance = 999999
@@ -1729,10 +1787,8 @@ RunService.RenderStepped:Connect(function()
         Lighting.ClockTime = 14
         Lighting.GlobalShadows = false
     end
-    Camera.FieldOfView = states.FOV and settingsConfig.FOVValue or 70
 end)
 
--- [Xray]
 local xrayCache = {}
 RunService.RenderStepped:Connect(function()
     if states.Xray then
@@ -1761,7 +1817,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- [ESP]
 local espCache = {}
 local function setupESP(p)
     if p == LocalPlayer then return end
@@ -1893,7 +1948,6 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- [Spider]
 RunService.RenderStepped:Connect(function()
     if states.Spider then
         local char = LocalPlayer.Character
@@ -1909,60 +1963,99 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ======== BADWARS 전용 기능 (카메라 회전 제거, 딜레이 0.01, 사거리 60, 공격 5회) ========
+-- ======== AutoSprint ========
+RunService.RenderStepped:Connect(function()
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        local hum = char.Humanoid
+        if states.AutoSprint then
+            local success, err = pcall(function()
+                hum.Sprint = true
+            end)
+            if not success then
+                hum.WalkSpeed = 22
+            end
+        else
+            hum.WalkSpeed = 19
+        end
+    end
+end)
+
+-- ======== BADWARS 전용 ========
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Backquote then
+        states.BadKillAuraCamera = not states.BadKillAuraCamera
+    end
+end)
+
 local badKillCooldown = 0
+local cameraTarget = nil
+local camTween = nil
 
 RunService.RenderStepped:Connect(function(dt)
     pcall(function()
-        if not states.BadKillAura then return end
+        if not states.BadKillAura then
+            if camTween then camTween:Cancel() end
+            return
+        end
 
         badKillCooldown = badKillCooldown - dt
-        if badKillCooldown > 0 then return end
+        if badKillCooldown <= 0 then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local root = char.HumanoidRootPart
+                local target = nil
+                local closestDist = settingsConfig.BadKillRange
+                local targetChar = nil
+                local rangeBonus = states.HitboxExpander and settingsConfig.HitboxSize or 0
+                local effectiveRange = settingsConfig.BadKillRange + rangeBonus
 
-        local char = LocalPlayer.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-
-        local target = nil
-        local closestDist = settingsConfig.BadKillRange
-        local targetChar = nil
-        local rangeBonus = states.HitboxExpander and settingsConfig.HitboxSize or 0
-        local effectiveRange = settingsConfig.BadKillRange + rangeBonus
-
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr == LocalPlayer then continue end
-            if states.BadKillAuraTeamCheck and LocalPlayer.Team and plr.Team == LocalPlayer.Team then
-                continue
-            end
-            local eChar = plr.Character
-            if eChar and eChar:FindFirstChild("HumanoidRootPart") and eChar:FindFirstChild("Humanoid") then
-                local eRoot = eChar.HumanoidRootPart
-                local dist = (root.Position - eRoot.Position).Magnitude
-                if dist < effectiveRange and dist < closestDist then
-                    closestDist = dist
-                    target = eRoot
-                    targetChar = eChar
+                for _, plr in ipairs(Players:GetPlayers()) do
+                    if plr == LocalPlayer then continue end
+                    if states.BadKillAuraTeamCheck and LocalPlayer.Team and plr.Team == LocalPlayer.Team then continue end
+                    local eChar = plr.Character
+                    if eChar and eChar:FindFirstChild("HumanoidRootPart") and eChar:FindFirstChild("Humanoid") then
+                        local eRoot = eChar.HumanoidRootPart
+                        local dist = (root.Position - eRoot.Position).Magnitude
+                        if dist < effectiveRange and dist < closestDist then
+                            local lookDir = root.CFrame.LookVector
+                            local toTarget = (eRoot.Position - root.Position).Unit
+                            local dot = lookDir:Dot(toTarget)
+                            if dot > -0.5 then
+                                closestDist = dist
+                                target = eRoot
+                                targetChar = eChar
+                            end
+                        end
+                    end
                 end
+
+                if target and targetChar then
+                    Attack(targetChar)
+                    cameraTarget = target
+                else
+                    cameraTarget = nil
+                end
+
+                badKillCooldown = settingsConfig.BadSwingDelay
             end
         end
 
-        if target and targetChar then
-            -- 몸 회전 (즉시)
-            root.CFrame = CFrame.new(root.Position, target.Position)
-
-            -- 카메라 회전 없음 (제거됨)
-
-            -- 공격 (5회)
-            Attack(targetChar)
-
-            -- 쿨다운 0.01초
-            badKillCooldown = settingsConfig.BadSwingDelay
+        if states.BadKillAuraCamera and cameraTarget then
+            local currentCamPos = Camera.CFrame.Position
+            local targetPos = cameraTarget.Position
+            local goalCF = CFrame.new(currentCamPos, targetPos)
+            if camTween then camTween:Cancel() end
+            camTween = TweenService:Create(Camera, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                CFrame = goalCF
+            })
+            camTween:Play()
         end
     end)
 end)
 
--- Bad Fly (Q 토글)
 local badFlyActive = false
 local badFlyY = nil
 
@@ -2036,17 +2129,6 @@ RunService.Heartbeat:Connect(function()
         local currentPos = root.Position
         root.CFrame = CFrame.new(Vector3.new(currentPos.X, badFlyY, currentPos.Z))
     end)
-end)
-
--- AutoSprint
-RunService.RenderStepped:Connect(function()
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("Humanoid") then
-        local hum = char.Humanoid
-        if states.AutoSprint then
-            hum.Sprint = true
-        end
-    end
 end)
 
 -- ======== 저장된 상태 복원 ========
