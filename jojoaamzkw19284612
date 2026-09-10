@@ -1,6 +1,5 @@
--- [최종 확정] 모든 기능 + 안티치트/벤/킥 우회 최대 강화 (구문 오류 제거 완료)
 -- ============================================
--- [비상 상태] 스크립트 다운 알림 (모던 스타일)
+-- [비상 상태] 스크립트 다운 알림 (Executor 용)
 -- 기존 코드는 모두 주석 처리되었습니다.
 -- ============================================
 
@@ -10,18 +9,24 @@
 ]]
 
 -- ============================================
--- 비상 알림 UI (CoreGui, 모던 스타일)
+-- 비상 알림 UI (CoreGui 우선, PlayerGui 폴백)
 -- ============================================
 
-local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 -- 기존 알림 제거
-if CoreGui:FindFirstChild("CubicEmergencyUI") then
-    CoreGui.CubicEmergencyUI:Destroy()
-end
+pcall(function()
+    if CoreGui:FindFirstChild("CubicEmergencyUI") then
+        CoreGui.CubicEmergencyUI:Destroy()
+    end
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if pg and pg:FindFirstChild("CubicEmergencyUI") then
+        pg.CubicEmergencyUI:Destroy()
+    end
+end)
 
 -- ScreenGui 생성
 local ScreenGui = Instance.new("ScreenGui")
@@ -29,9 +34,18 @@ ScreenGui.Name = "CubicEmergencyUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
-pcall(function() ScreenGui.Parent = CoreGui end)
-if ScreenGui.Parent ~= CoreGui then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- CoreGui 우선 시도, 실패하면 PlayerGui로 폴백
+local parented = false
+pcall(function()
+    ScreenGui.Parent = CoreGui
+    parented = true
+end)
+
+if not parented then
+    pcall(function()
+        ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end)
 end
 
 -- 배경 어둡게 (블러 효과 대신 어두운 오버레이)
@@ -47,7 +61,7 @@ TweenService:Create(Backdrop, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
     BackgroundTransparency = 0.45
 }):Play()
 
--- 메인 프레임 (모던 스타일: 어두운 배경 + 얇은 회색 테두리 + 둥근 모서리)
+-- 메인 프레임 (모던 스타일)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
@@ -67,7 +81,7 @@ MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.4
 MainStroke.Parent = MainFrame
 
--- 상단 타이틀 바 (Cubic UI 스타일)
+-- 상단 타이틀 바
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 52)
 TitleBar.BackgroundColor3 = Color3.fromRGB(28, 30, 38)
@@ -180,26 +194,13 @@ CloseBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
 end)
 
--- 등장 애니메이션 (부드럽게 커지면서 나타남)
+-- 등장 애니메이션
 TweenService:Create(MainFrame, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 520, 0, 260),
     Position = UDim2.new(0.5, -260, 0.5, -130)
 }):Play()
--- local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
-local HttpService = game:GetService("HttpService")
-local VirtualUser = game:GetService("VirtualUser")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-local ScreenSize = Camera.ViewportSize
 
-pcall(function()
+-- pcall(function()
     if VirtualUser and VirtualUser.CaptureController then
         VirtualUser:CaptureController()
     end
