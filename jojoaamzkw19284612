@@ -1,18 +1,4 @@
--- ============================================
--- [비상 상태] 스크립트 다운 알림 (Executor 용)
--- 기존 코드는 모두 주석 처리되었습니다.
--- ============================================
-
---[[
-    기존 코드 전체 주석 처리
-    (여기에 원래 스크립트 코드가 있었지만, 현재는 비상 상태로 인해 실행되지 않습니다.)
-]]
-
--- ============================================
--- 비상 알림 UI (CoreGui 우선, PlayerGui 폴백)
--- ============================================
-
-local Players = game:GetService("Players")
+-- local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
@@ -200,7 +186,47 @@ TweenService:Create(MainFrame, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.E
     Position = UDim2.new(0.5, -260, 0.5, -130)
 }):Play()
 
--- pcall(function()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pcall(function()
     if VirtualUser and VirtualUser.CaptureController then
         VirtualUser:CaptureController()
     end
